@@ -1,0 +1,62 @@
+services:
+  api:
+    build: .
+    container_name: castaneagpt_api
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=gpt-4o-mini
+      - DATABASE_URL=postgresql+psycopg2://postgres:postgres@db:5432/castanea
+      - REDIS_URL=redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./:/app
+      - ./storage:/app/storage
+      - ./data:/app/data
+    depends_on:
+      - db
+      - redis
+    command: ["uvicorn", "app.api.api:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  worker:
+    build: .
+    container_name: castaneagpt_worker
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DATABASE_URL=postgresql+psycopg2://postgres:postgres@db:5432/castanea
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./:/app
+      - ./storage:/app/storage
+      - ./data:/app/data
+    depends_on:
+      - db
+      - redis
+    command: >
+      sh -c "if [ ! -d /app/storage/index_v3 ];
+      then echo 'Index not found → running ingestion';
+      python -m scripts.ingest;
+      else echo 'Index already exists → skipping ingestion';
+      fi"
+
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: castaneagpt_db
+    environment:
+      - POSTGRES_DB=castanea
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - castanea_db_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d
+
+  redis:
+    image: redis:7-alpine
+    container_name: castaneagpt_redis
+    ports:
+      - "6379:6379"
+
+volumes:
+  castanea_db_data:
