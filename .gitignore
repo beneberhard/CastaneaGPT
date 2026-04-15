@@ -1,0 +1,6 @@
+.env
+.vscode/
+storage/
+data/NDVI_rasters/
+data/corpus_clean/
+data/tmp/

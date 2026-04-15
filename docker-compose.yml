@@ -1,43 +1,52 @@
 services:
   api:
     build: .
+    env_file:
+      - .env
     container_name: castaneagpt_api
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_MODEL=gpt-4o-mini
       - DATABASE_URL=postgresql+psycopg2://postgres:postgres@db:5432/castanea
       - REDIS_URL=redis://redis:6379/0
+      - INDEX_PERSIST_DIR=/app/storage/index_v2
     ports:
       - "8000:8000"
     volumes:
       - ./:/app
-      - ./storage:/app/storage
-      - ./data:/app/data
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      worker:
+        condition: service_completed_successfully
     command: ["uvicorn", "app.api.api:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
   worker:
     build: .
     container_name: castaneagpt_worker
+    env_file:
+      - .env
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - DATABASE_URL=postgresql+psycopg2://postgres:postgres@db:5432/castanea
       - REDIS_URL=redis://redis:6379/0
+      - INDEX_PERSIST_DIR=/app/storage/index_v2
     volumes:
       - ./:/app
-      - ./storage:/app/storage
-      - ./data:/app/data
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     command: >
-      sh -c "if [ ! -d /app/storage/index_v3 ];
+      sh -c "if [ ! -d $$INDEX_PERSIST_DIR ];
       then echo 'Index not found → running ingestion';
       python -m scripts.ingest;
       else echo 'Index already exists → skipping ingestion';
       fi"
+    restart: "no"
 
   db:
     image: postgis/postgis:16-3.4
@@ -51,12 +60,22 @@ services:
     volumes:
       - castanea_db_data:/var/lib/postgresql/data
       - ./db/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d castanea"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   redis:
     image: redis:7-alpine
     container_name: castaneagpt_redis
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
 volumes:
   castanea_db_data:

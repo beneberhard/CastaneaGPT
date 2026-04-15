@@ -45,7 +45,7 @@ def compute_ndvi_stats_for_stand(stand_id):
     """Return NDVI stats for a stand keyed by (year, month), or an empty dict."""
     from sqlalchemy import text
 
-    from app.api.db import engine
+    from app.api.db import get_engine
 
     sql = text("""
         SELECT ST_AsGeoJSON(geom)
@@ -54,7 +54,7 @@ def compute_ndvi_stats_for_stand(stand_id):
         LIMIT 1;
     """)
 
-    with engine.connect() as conn:
+    with get_engine().connect() as conn:
         row = conn.execute(sql, {"id": stand_id}).fetchone()
 
     if not row:
@@ -103,7 +103,7 @@ def build_stand_context_block(stand_id):
     """Return stand metadata for prompt injection, or an empty string."""
     from sqlalchemy import text
 
-    from app.api.db import engine
+    from app.api.db import get_engine
 
     sql = text("""
         SELECT
@@ -119,7 +119,7 @@ def build_stand_context_block(stand_id):
         LIMIT 1;
     """)
 
-    with engine.connect() as conn:
+    with get_engine().connect() as conn:
         row = conn.execute(sql, {"id": stand_id}).fetchone()
 
     if not row:

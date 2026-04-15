@@ -14,6 +14,7 @@ class Verbosity(str, Enum):
 class CiteStyle(str, Enum):
     inline = "inline"
     end = "end"
+    none = "none"
 
 
 

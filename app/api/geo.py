@@ -3,7 +3,7 @@
 # app/api/geo.py
 from fastapi import APIRouter, Query, HTTPException
 from sqlalchemy import text
-from app.api.db import engine
+from app.api.db import get_engine
 import json
 
 router = APIRouter(prefix="/geo", tags=["geo"])
@@ -28,7 +28,7 @@ def get_stands(
         LIMIT 200;
     """)
 
-    with engine.connect() as conn:
+    with get_engine().connect() as conn:
         rows = conn.execute(
             sql, {"minx": minx, "miny": miny, "maxx": maxx, "maxy": maxy}
         ).fetchall()
@@ -55,7 +55,7 @@ def get_stand_by_id(stand_id: int):
         LIMIT 1;
     """)
 
-    with engine.connect() as conn:
+    with get_engine().connect() as conn:
         row = conn.execute(sql, {"id": stand_id}).fetchone()
 
     if not row or not row.geojson:
@@ -85,7 +85,7 @@ def get_stand_summary(stand_id: int):
         LIMIT 1;
     """)
 
-    with engine.connect() as conn:
+    with get_engine().connect() as conn:
         row = conn.execute(sql, {"id": stand_id}).fetchone()
 
     if not row:

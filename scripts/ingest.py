@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import re
 import requests
@@ -18,7 +19,7 @@ CLEAN = Path("data/corpus_clean")
 CLEAN.mkdir(parents=True, exist_ok=True)
 
 # >>> ADDED: where to persist the LlamaIndex index
-PERSIST_DIR = Path("storage/index_v1")
+PERSIST_DIR = Path(os.getenv("INDEX_PERSIST_DIR", "storage/index_v1"))
 PERSIST_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -157,16 +158,13 @@ def build_and_persist_index():
     # -----------------------------
     # Versioned persist dir bump
     # -----------------------------
-    # If PERSIST_DIR is storage/index_v1, automatically write to the next free version
+    # If PERSIST_DIR is versioned, use it directly rather than auto-bumping.
     base = PERSIST_DIR.parent
     name = PERSIST_DIR.name  # "index_v1"
     m = re.match(r"^(.*)_v(\d+)$", name)
     if m:
         prefix, v = m.group(1), int(m.group(2))
         persist_dir = base / f"{prefix}_v{v}"
-        while persist_dir.exists() and any(persist_dir.iterdir()):
-            v += 1
-            persist_dir = base / f"{prefix}_v{v}"
     else:
         # Fallback: use PERSIST_DIR as-is
         persist_dir = PERSIST_DIR

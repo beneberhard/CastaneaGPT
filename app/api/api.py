@@ -11,6 +11,7 @@ from typing import Optional, List, Dict
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
+from dotenv import load_dotenv
 
 from llama_index.core import Settings
 from llama_index.core.llms import ChatMessage, MessageRole
@@ -26,6 +27,7 @@ from app.utils.quiz import quiz
 
 from app.api.ndvi import router as ndvi_router
 
+load_dotenv()
 
 
 
@@ -531,7 +533,14 @@ function renderStandList(fc) {
   const container = document.getElementById("standList");
   container.innerHTML = "";
 
-  (fc.features || []).forEach(f => {
+  const features = Array.isArray(fc.features) ? fc.features : [];
+
+  if (!features.length) {
+    container.innerHTML = "<div style='color:#666;'>No stands found in the current map view.</div>";
+    return;
+  }
+
+  features.forEach(f => {
     const p = f.properties || {};
     const standId = p.id;
 
@@ -664,7 +673,9 @@ async function loadStands() {
   }).addTo(map);
 
   const n = (fc.features || []).length;
-  status.textContent = `Loaded ${n} stand(s) in view.`;
+  status.textContent = n
+    ? `Loaded ${n} stand(s) in view.`
+    : 'Loaded 0 stands. The database may be empty, or the stands may be outside the current map extent.';
 }
 
 

@@ -5,8 +5,11 @@ import re
 from dataclasses import dataclass
 from typing import List, Dict
 
+from dotenv import load_dotenv
 from openai import OpenAI
-from app.rag.rag import hybrid_retriever   # your existing RAG retriever
+from app.rag.rag import get_hybrid_retriever
+
+load_dotenv()
 
 client = OpenAI()
 
@@ -45,7 +48,7 @@ class QuizEngine:
 
     def retrieve_context(self, topic: str, top_k: int = 5):
 
-        nodes = hybrid_retriever.retrieve(topic)
+        nodes = get_hybrid_retriever().retrieve(topic)
 
         context_blocks = []
         for n in nodes[:top_k]:
