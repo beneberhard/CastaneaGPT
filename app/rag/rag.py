@@ -9,27 +9,10 @@ from llama_index.core.retrievers import QueryFusionRetriever, VectorIndexRetriev
 from llama_index.llms.openai import OpenAI
 from llama_index.retrievers.bm25 import BM25Retriever
 
+from app.api.prompting import build_response_policy
 from app.ui.config import PERSIST_DIR
 
 load_dotenv()
-
-
-TEXT_QA_PROMPT = PromptTemplate(
-    "You are a helpful assistant.\n"
-    "IMPORTANT: Answer in the SAME LANGUAGE as the user's question.\n"
-    "Use ONLY the provided context as the factual basis.\n"
-    "Do NOT add new facts.\n"
-    "If the context is insufficient, say so explicitly.\n"
-    "\n"
-    "Context:\n"
-    "{context_str}\n"
-    "\n"
-    "Question:\n"
-    "{query_str}\n"
-    "\n"
-    "Answer:"
-)
-
 
 @lru_cache(maxsize=1)
 def get_llm():
@@ -37,12 +20,12 @@ def get_llm():
         model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
         temperature=0,
         system_prompt=(
-            "You are a retrieval-augmented assistant.\n"
+            "You are CastaneaGPT, a retrieval-augmented assistant.\n"
             "Follow these rules strictly:\n"
-            "1) Answer in the SAME LANGUAGE as the user's question.\n"
+            "1) Follow the response policy and task instructions exactly.\n"
             "2) Use ONLY the provided context as factual basis. Do not add new facts.\n"
             "3) If the context is insufficient, say so clearly.\n"
-            "4) Be concise and factual.\n"
+            "4) Do not let generic assistant style override the requested mode, verbosity, language, or citation behavior.\n"
         ),
     )
     Settings.llm = llm
@@ -75,18 +58,50 @@ def get_hybrid_retriever():
     )
 
 
-@lru_cache(maxsize=1)
-def get_query_engine():
-    get_llm()
-    return RetrieverQueryEngine.from_args(
-        retriever=get_hybrid_retriever(),
-        response_mode="compact",
-        text_qa_template=TEXT_QA_PROMPT,
+def build_text_qa_prompt(mode: str, verbosity: str, language: str, cite_style: str) -> PromptTemplate:
+    policy = build_response_policy(
+        mode=mode,
+        verbosity=verbosity,
+        language=language,
+        cite_style=cite_style,
+    )
+    return PromptTemplate(
+        f"{policy}\n\n"
+        "TASK:\n"
+        "- Answer the user's question directly from the provided context.\n"
+        "- If the context is insufficient for a requested detail, state that clearly.\n"
+        "- Keep the requested mode behavior while remaining grounded in the context.\n"
+        "\n"
+        "Context:\n"
+        "{{context_str}}\n"
+        "\n"
+        "Question:\n"
+        "{{query_str}}\n"
+        "\n"
+        "Answer:"
     )
 
 
-def query_rag(question: str) -> dict:
-    resp = get_query_engine().query(question)
+def query_rag(
+    question: str,
+    *,
+    mode: str,
+    verbosity: str,
+    language: str,
+    cite_style: str,
+) -> dict:
+    query_engine = RetrieverQueryEngine.from_args(
+        retriever=get_hybrid_retriever(),
+        llm=get_llm(),
+        response_mode="compact",
+        text_qa_template=build_text_qa_prompt(
+            mode=mode,
+            verbosity=verbosity,
+            language=language,
+            cite_style=cite_style,
+        ),
+    )
+    resp = query_engine.query(question)
 
     sources = []
     for i, sn in enumerate(getattr(resp, "source_nodes", []) or [], start=1):

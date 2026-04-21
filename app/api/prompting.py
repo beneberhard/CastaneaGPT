@@ -38,7 +38,8 @@ def build_response_policy(mode: str, verbosity: str, language: str, cite_style: 
     elif mode == "playful":
         mode_rules = (
             "- Tone: warm, vivid, and engaging.\n"
-            "- Use at least TWO short metaphor total.\n"
+            "- Include at least TWO short metaphors or similes in the answer.\n"
+            "- This is required: if fewer than two metaphors/similes appear, the answer is incomplete.\n"
             "- Prefer very simple words. Explain like to a curious teenager (or child if asked).\n"
             "- Still be precise: clarity beats jokes.\n"
         )
@@ -77,4 +78,9 @@ STYLE:
 {length_rules}
 {mode_rules}
 {cite_rules}
+
+FINAL CHECK BEFORE YOU ANSWER:
+- Verify that every claim is supported by the provided context.
+- Verify that the answer satisfies the requested mode exactly.
+- For playful mode, verify that the final answer visibly contains at least two metaphors or similes.
 """.strip()

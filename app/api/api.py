@@ -4,7 +4,6 @@ This is the stable API for CastaneaGPT.
 It uses FastAPI to provide endpoints for querying the RAG system.
 """
 
-import os
 import uuid
 from typing import Optional, List, Dict
 
@@ -13,12 +12,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-from llama_index.core import Settings
-from llama_index.core.llms import ChatMessage, MessageRole
-from llama_index.llms.openai import OpenAI
-
 from app.api.schemas import ChatRequest
-from app.api.prompting import build_response_policy
 from app.api.memory import InMemorySessionStore, format_memory
 from app.api.geo import router as geo_router
 from app.rag.rag import query_rag
@@ -55,74 +49,6 @@ def is_uuid(val: str) -> bool:
 def _enum_to_str(x) -> str:
     """Supports Enum values from Pydantic (e.g., AnswerMode.professional)."""
     return x.value if hasattr(x, "value") else str(x)
-
-
-def rewrite_answer_with_policy(
-    grounded_answer: str,
-    context_digest: str,
-    mode: str,
-    verbosity: str,
-    language: str,
-    language_instruction: str,
-    cite_style: str,
-) -> str:
-    """
-    Rewrite layer:
-    - Style + verbosity + citation style enforcement happens here
-    - Must NOT introduce new facts beyond the retrieved context + grounded answer
-    """
-
-    # Practical guidance:
-    # short  -> ~200 to 300
-    # normal -> ~600 to 800
-    # long   -> ~1000 to 1500
-    max_tokens = 300 if verbosity == "short" else 1200 if verbosity == "long" else 700
-
-    llm = OpenAI(
-        model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-        temperature=0,
-        max_tokens=max_tokens,
-    )
-
-    policy = build_response_policy(
-        mode=mode,
-        verbosity=verbosity,
-        language=language,   # language code: en / it / de / auto
-        cite_style=cite_style,
-    )
-
-    prompt = (
-        f"{policy}\n\n"
-        "REWRITE TASK:\n"
-        "1) Write the final answer in the requested MODE and VERBOSITY.\n"
-        "2) Use ONLY the information contained in:\n"
-        "   - CONTEXT (retrieved snippets)\n"
-        "   - GROUNDED ANSWER (baseline)\n"
-        "3) Do NOT introduce any new facts not supported by CONTEXT.\n"
-        "4) If CONTEXT is insufficient for a requested detail, explicitly say so.\n"
-        "5) Apply the requested citation style when referring to sources.\n\n"
-        "LANGUAGE RULE:\n"
-        f"{language_instruction}\n\n"
-        "CONTEXT (retrieved snippets):\n"
-        f"{context_digest}\n\n"
-        "GROUNDED ANSWER (baseline):\n"
-        f"{grounded_answer}\n"
-    )
-
-    messages = [
-        ChatMessage(
-            role=MessageRole.SYSTEM,
-            content="You rewrite answers using provided context only, following the given policy.",
-        ),
-        ChatMessage(role=MessageRole.USER, content=prompt),
-    ]
-
-    try:
-        resp = llm.chat(messages)
-        out = (resp.message.content or "").strip()
-        return out or grounded_answer
-    except Exception:
-        return grounded_answer
 
 
 # -----------------------------
@@ -190,25 +116,10 @@ def chat(req: ChatRequest):
     # 1. If user selects language in UI -> force it
     # 2. If UI = auto -> mirror user message language
     # -----------------------------
-    lang_name_map = {
-        "en": "English",
-        "it": "Italian",
-        "de": "German",
-    }
-
     if req.language and req.language != "auto":
         language = req.language
-        language_name = lang_name_map.get(language, "English")
-        language_instruction = (
-            f"The answer MUST be written entirely in {language_name}. "
-            f"Do not switch language. Do not mix languages."
-        )
     else:
         language = "auto"
-        language_instruction = (
-            "Write the answer in the SAME language as the user's question. "
-            "Do not switch languages. Do not mix languages."
-        )
 
     # -----------------------------
     # Session handling
@@ -272,9 +183,15 @@ def chat(req: ChatRequest):
     # -----------------------------
     # Step 1: RAG retrieval
     # -----------------------------
-    rag_out = query_rag(retrieval_question)
+    rag_out = query_rag(
+        retrieval_question,
+        mode=mode,
+        verbosity=verbosity,
+        language=language,
+        cite_style=cite_style,
+    )
 
-    grounded_answer = rag_out.get("answer", "")
+    final_answer = rag_out.get("answer", "")
     sources = rag_out.get("sources", []) or []
 
     # -----------------------------
@@ -300,29 +217,6 @@ def chat(req: ChatRequest):
             "score": score,
             "snippet": snippet,
         })
-
-    # -----------------------------
-    # Context digest
-    # -----------------------------
-    digest_lines = []
-    for s in normalized_sources[:5]:
-        if s["snippet"]:
-            digest_lines.append(f"- {s['label']}: {s['snippet']}")
-
-    context_digest = "\n".join(digest_lines) if digest_lines else "(no retrieved snippets)"
-
-    # -----------------------------
-    # Step 2: Rewrite answer
-    # -----------------------------
-    final_answer = rewrite_answer_with_policy(
-        grounded_answer=grounded_answer,
-        context_digest=context_digest + "\n\n" + ndvi_context_block,
-        mode=mode,
-        verbosity=verbosity,
-        language=language,
-        language_instruction=language_instruction,
-        cite_style=cite_style,
-    )
 
     # -----------------------------
     # Citation formatting
