@@ -1,0 +1,11 @@
+services:
+  api:
+    volumes:
+      - ./:/app
+      - castanea_index_data:/app/storage
+    command: ["uvicorn", "app.api.api:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  worker:
+    volumes:
+      - ./:/app
+      - castanea_index_data:/app/storage

@@ -3,7 +3,7 @@ import uuid
 import json
 import re
 from dataclasses import dataclass
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -39,8 +39,50 @@ from typing import Dict, List
 
 class QuizEngine:
 
+    OPTION_LETTERS = ["A", "B", "C", "D"]
+
     def __init__(self):
         self.active_quizzes: Dict[str, List[Question]] = {}
+
+    def _split_option_label(self, option: str) -> tuple[Optional[str], str]:
+        text = str(option or "").strip()
+        match = re.match(r"^([A-D])[\.\):\-]?\s*(.+)$", text, re.IGNORECASE)
+        if match:
+            return match.group(1).upper(), match.group(2).strip()
+        return None, text
+
+    def _normalize_options(self, options: List[str]) -> List[str]:
+        normalized = []
+        for idx, raw_option in enumerate(options[: len(self.OPTION_LETTERS)]):
+            _, option_text = self._split_option_label(raw_option)
+            option_text = option_text.strip()
+            if not option_text:
+                continue
+            normalized.append(f"{self.OPTION_LETTERS[idx]}. {option_text}")
+        return normalized
+
+    def _normalize_correct_answer(self, correct_answer: str, options: List[str]) -> str:
+        raw_answer = str(correct_answer or "").strip()
+        if not raw_answer:
+            raise ValueError("Missing correct answer")
+
+        option_map = {}
+        text_map = {}
+        for option in options:
+            label, option_text = self._split_option_label(option)
+            if label:
+                option_map[label] = option
+            text_map[option_text.casefold()] = option
+
+        answer_label, answer_text = self._split_option_label(raw_answer)
+
+        if answer_label and answer_label in option_map:
+            return option_map[answer_label]
+
+        if answer_text.casefold() in text_map:
+            return text_map[answer_text.casefold()]
+
+        raise ValueError(f"Correct answer does not match quiz options: {correct_answer}")
 
     # -----------------------------------------
     # Retrieve knowledge from RAG
@@ -156,8 +198,8 @@ Structure:
 [
   {{
     "question": "...",
-    "options": ["A", "B", "C", "D"],
-    "correct_answer": "...",
+    "options": ["A. first option", "B. second option", "C. third option", "D. fourth option"],
+    "correct_answer": "A. first option",
     "explanation": "..."
   }}
 ]
@@ -165,7 +207,7 @@ Structure:
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
-            temperature=0.7,
+            temperature=0,
             messages=[
                 {"role": "system", "content": "You generate quiz questions."},
                 {"role": "user", "content": prompt}
@@ -204,11 +246,23 @@ Structure:
             if not all(k in q for k in ["question", "options", "correct_answer", "explanation"]):
                 continue
 
+            normalized_options = self._normalize_options(q["options"])
+            if len(normalized_options) < 2:
+                continue
+
+            try:
+                normalized_correct_answer = self._normalize_correct_answer(
+                    q["correct_answer"],
+                    normalized_options,
+                )
+            except ValueError:
+                continue
+
             question = Question(
                 id=str(uuid.uuid4()),
                 question=q["question"],
-                options=q["options"],
-                correct_answer=q["correct_answer"],
+                options=normalized_options,
+                correct_answer=normalized_correct_answer,
                 explanation=q["explanation"]
             )
 
