@@ -16,7 +16,11 @@ from app.api.schemas import ChatRequest
 from app.api.memory import InMemorySessionStore, format_memory
 from app.api.geo import router as geo_router
 from app.rag.rag import query_rag
-from app.utils.stand_context import build_ndvi_context_block, build_stand_context_block
+from app.utils.stand_context import (
+    build_ndvi_context_block,
+    build_stand_context_block,
+    should_include_ndvi_context,
+)
 from app.utils.quiz import quiz
 
 from app.api.ndvi import router as ndvi_router
@@ -154,7 +158,7 @@ def chat(req: ChatRequest):
     # -----------------------------
     ndvi_context_block = ""
 
-    if getattr(req, "stand_id", None):
+    if getattr(req, "stand_id", None) and should_include_ndvi_context(req.query):
         ndvi_context_block = build_ndvi_context_block(req.stand_id)
 
     # -----------------------------

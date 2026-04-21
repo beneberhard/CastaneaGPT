@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 import numpy as np
@@ -6,6 +7,72 @@ import rasterio
 from rasterio.mask import mask
 
 NDVI_DIR = Path("data/NDVI_rasters")
+
+NDVI_QUERY_PATTERNS = (
+    # English
+    r"\bndvi\b",
+    r"\bvegetation\b",
+    r"\bvegetative\b",
+    r"\bgreenness\b",
+    r"\bcanopy\b",
+    r"\bvigor\b",
+    r"\bvigour\b",
+    r"\bbiomass\b",
+    r"\bhealth(?:ier)?\b",
+    r"\bstress(?:ed)?\b",
+    r"\bremote\s+sensing\b",
+    r"\bsatellite\b",
+    r"\bimagery\b",
+    r"\btime\s+series\b",
+    r"\btrend\b",
+    r"\bchange(?:s|d)?\b",
+    r"\bdynamics?\b",
+    r"\bcompare\b",
+    r"\bmonitor(?:ing)?\b",
+    r"\bseason(?:al)?\b",
+    # Italian
+    r"\bvegetazione\b",
+    r"\bchioma\b",
+    r"\bbiomassa\b",
+    r"\bsalute\s+della\s+vegetazione\b",
+    r"\bstress\s+vegetativo\b",
+    r"\btelerilevamento\b",
+    r"\bsatellit(?:e|are)\b",
+    r"\bimmagin(?:e|i)\b",
+    r"\bserie\s+temporale\b",
+    r"\btendenz[ae]\b",
+    r"\bcambiament(?:o|i)\b",
+    r"\bdinamic(?:a|he)\b",
+    r"\bconfronta(?:re|to)?\b",
+    r"\bmonitoragg(?:io|i)\b",
+    r"\bstagional(?:e|i)\b",
+    # German
+    r"\bvegetation\b",
+    r"\bvegetationszustand\b",
+    r"\bkronendach\b",
+    r"\bbiomasse\b",
+    r"\bgesundheit\s+der\s+vegetation\b",
+    r"\bvegetationsstress\b",
+    r"\bfernerkundung\b",
+    r"\bsatellit(?:en|enbild|enbilder)?\b",
+    r"\bzeitreihe[n]?\b",
+    r"\btrend(?:s)?\b",
+    r"\bveranderung(?:en)?\b",
+    r"\bveränderung(?:en)?\b",
+    r"\bdynamik\b",
+    r"\bvergleichen?\b",
+    r"\bmonitoring\b",
+    r"\bsaisonal(?:e|er|en)\b",
+)
+
+
+def should_include_ndvi_context(question: str) -> bool:
+    """Return True when the user question is explicitly asking for NDVI-like analysis."""
+    if not question:
+        return False
+
+    normalized = question.lower()
+    return any(re.search(pattern, normalized) for pattern in NDVI_QUERY_PATTERNS)
 
 
 def compute_ndvi_stats(polygon_geojson):
