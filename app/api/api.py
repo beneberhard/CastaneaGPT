@@ -193,6 +193,7 @@ def chat(req: ChatRequest):
         verbosity=verbosity,
         language=language,
         cite_style=cite_style,
+        language_hint_text=req.query,
     )
 
     final_answer = rag_out.get("answer", "")
