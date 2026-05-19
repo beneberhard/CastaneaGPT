@@ -1,7 +1,5 @@
 # CastaneaGPT
 
-
-
 ## Docker Compose Modes
 
 Stable default runtime:
@@ -29,6 +27,7 @@ docker compose run --rm --build reingest
 ```
 
 This one-off service:
+
 - uses the current repo contents from your host, so refreshed `data/corpus_clean` files are visible locally
 - rebuilds the persisted index in the shared Docker volume
 - does not depend on the normal worker skip logic
@@ -39,8 +38,6 @@ After that, start or restart the app normally:
 docker compose up
 ```
 
-
-
 18.5.2026:
 In Quiz, especially after questions on pests and diseases, sources related to Turkey appear excessively often. This was fixed in utils/quiz.py -Generate quiz -def generate... in the -prompt:Avoid overusing any single regional case study or country background across the quiz.
 
@@ -49,6 +46,7 @@ changed: added a citation label formatter in app/rag/rag.py (line 140):
 def _source_year(meta: dict[str, Any]) -> str:...
 
 ## LLM Provider
+
 The model currently running is the OpenAI model. Below see the documentation how it was attempted to switch to the local model (Qwen 3.5 running in LM Studio).
 
 Local model not working due to the following issues (the chat model works, but the embedding model doesn't):
@@ -60,6 +58,7 @@ Documentation:
 Use the local LM Studio model for development:
 see app/llm_config.py
 for this purpose changed:
+
 - app/rag/rag.py (line28)
 - app/utils/quiz.py (line 15)
 - scripts/ingest.py (line 279) (index creation explicitly uses the same embedding model 'text-embedding-3-small')
@@ -76,26 +75,51 @@ Switch back to OpenAI for demos or production:
 Switch the model (openai/local) in .env: LLM_PROVIDER=...(openai or local)
 
 after switching run:
+
+```bash
 docker compose restart api
-or: docker compose up --build -d api
+```
+
+or:
+
+```bash
+docker compose up --build -d api
+```
+
 for development mode:
+
+```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml restart api
+```
 
 ```bash
 LLM_PROVIDER=openai
 OPENAI_API_KEY=...
 OPENAI_MODEL=gpt-4o-mini
 ```
-Keep `text-embedding-3-small` unless you rebuild the index with a different embedding model.
 
+Keep `text-embedding-3-small` unless you rebuild the index with a different embedding model.
 
 19.5.2026
 Several files were highlighted in red in the explorer. This meant: nothing is wrong. Red means VS Code/Git sees it as modified after the last commit.
 
 also the README.md file in red: so it was committed:
+
+```bash
 git add README.md
 git commit -m "Update README notes"
+```
 
 User name/email for git commits was changed:
-git config --global user.email "bennoeberhard@gmail.com"
 
+```bash
+git config --global user.email "bennoeberhard@gmail.com"
+```
+
+After
+
+```bash
+git push
+```
+
+the the commit is on the remote repository too.
