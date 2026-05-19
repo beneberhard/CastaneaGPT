@@ -1,44 +1,6 @@
 # CastaneaGPT
 
-## LLM Provider
-Use the local LM Studio model for development:
-see app/llm_config.py
-for this purpose changed:
-- app/rag/rag.py (line28)
-- app/utils/quiz.py (line 15)
-- scripts/ingest.py (line 279) (index creation explicitly uses the same embedding model 'text-embedding-3-small')
 
-```bash
-LLM_PROVIDER=local
-LOCAL_BASE_URL=http://localhost:1234/v1
-#Because the app is running inside a container, http://localhost:1234/v1 means "inside the #container", not my Mac. If (it is not, only in case) LM Studio is running on my Mac host, change #to: LOCAL_BASE_URL=http://host.docker.internal:1234/v1
-LOCAL_API_KEY=lm_studio
-LOCAL_MODEL=local-model
-```
-
-Local model not working due to the following issues:
-LM Studio model id/base URL,
-the local LlamaIndex wrapper,
-and the Qwen-oriented quiz prompt changes. 
-
-Switch back to OpenAI for demos or production:
-
-Switch the model (openai/local) in .env: LLM_PROVIDER=...(openai or local)
-
-after switching run:
-docker compose restart api
-or: docker compose up --build -d api
-for development mode:
-docker compose -f docker-compose.yml -f docker-compose.dev.yml restart api
-
-```bash
-LLM_PROVIDER=openai
-OPENAI_API_KEY=...
-OPENAI_MODEL=gpt-4o-mini
-```
-
-
-Keep `text-embedding-3-small` unless you rebuild the index with a different embedding model.
 
 ## Docker Compose Modes
 
@@ -85,3 +47,55 @@ In Quiz, especially after questions on pests and diseases, sources related to Tu
 The citation style in Chat is poor: e.g. the model saw context chunks labeled like Source 1, Source 2... but the API later renumbered the sources
 changed: added a citation label formatter in app/rag/rag.py (line 140):
 def _source_year(meta: dict[str, Any]) -> str:...
+
+## LLM Provider
+The model currently running is the OpenAI model. Below see the documentation how it was attempted to switch to the local model (Qwen 3.5 running in LM Studio).
+
+Local model not working due to the following issues (the chat model works, but the embedding model doesn't):
+LM Studio model id/base URL,
+the local LlamaIndex wrapper,
+and the Qwen-oriented quiz prompt changes. 
+
+Documentation:
+Use the local LM Studio model for development:
+see app/llm_config.py
+for this purpose changed:
+- app/rag/rag.py (line28)
+- app/utils/quiz.py (line 15)
+- scripts/ingest.py (line 279) (index creation explicitly uses the same embedding model 'text-embedding-3-small')
+
+```bash
+LLM_PROVIDER=local
+LOCAL_BASE_URL=http://localhost:1234/v1
+#Because the app is running inside a container, http://localhost:1234/v1 means "inside the #container", not my Mac. If (it is not, only in case) LM Studio is running on my Mac host, change #to: LOCAL_BASE_URL=http://host.docker.internal:1234/v1
+LOCAL_API_KEY=lm_studio
+LOCAL_MODEL=local-model
+```
+
+Switch back to OpenAI for demos or production:
+Switch the model (openai/local) in .env: LLM_PROVIDER=...(openai or local)
+
+after switching run:
+docker compose restart api
+or: docker compose up --build -d api
+for development mode:
+docker compose -f docker-compose.yml -f docker-compose.dev.yml restart api
+
+```bash
+LLM_PROVIDER=openai
+OPENAI_API_KEY=...
+OPENAI_MODEL=gpt-4o-mini
+```
+Keep `text-embedding-3-small` unless you rebuild the index with a different embedding model.
+
+
+19.5.2026
+Several files were highlighted in red in the explorer. This meant: nothing is wrong. Red means VS Code/Git sees it as modified after the last commit.
+
+also the README.md file in red: so it was committed:
+git add README.md
+git commit -m "Update README notes"
+
+User name/email for git commits was changed:
+git config --global user.email "bennoeberhard@gmail.com"
+
