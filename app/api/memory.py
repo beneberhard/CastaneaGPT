@@ -12,6 +12,7 @@ class SessionMemory:
     turns: List[Turn] = field(default_factory=list)
     updated_at: float = field(default_factory=lambda: time.time())
     language: Optional[str] = None
+    recent_source_keys: List[str] = field(default_factory=list)
 
 class InMemorySessionStore:
     def __init__(self, max_turns: int = 8, ttl_minutes: int = 120):
@@ -40,6 +41,18 @@ class InMemorySessionStore:
     def set_language(self, session_id: str, language: str) -> None:
         mem = self.get(session_id)
         mem.language = language
+        mem.updated_at = time.time()
+
+    def set_recent_sources(self, session_id: str, source_keys: List[str], max_sources: int = 12) -> None:
+        mem = self.get(session_id)
+        unique = []
+        seen = set()
+        for key in source_keys:
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            unique.append(key)
+        mem.recent_source_keys = unique[:max_sources]
         mem.updated_at = time.time()
 
     def clear(self, session_id: str) -> None:

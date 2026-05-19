@@ -5,11 +5,11 @@ services:
       - .env
     container_name: castaneagpt_api
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_MODEL=gpt-4o-mini
-      - DATABASE_URL=postgresql+psycopg2://postgres:postgres@db:5432/castanea
-      - REDIS_URL=redis://redis:6379/0
-      - INDEX_PERSIST_DIR=/app/storage/index_v2
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: gpt-4o-mini
+      DATABASE_URL: postgresql+psycopg2://postgres:postgres@db:5432/castanea
+      REDIS_URL: redis://redis:6379/0
+      INDEX_PERSIST_DIR: /app/storage/index_v2
     ports:
       - "8000:8000"
     volumes:
@@ -29,10 +29,10 @@ services:
     env_file:
       - .env
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - DATABASE_URL=postgresql+psycopg2://postgres:postgres@db:5432/castanea
-      - REDIS_URL=redis://redis:6379/0
-      - INDEX_PERSIST_DIR=/app/storage/index_v2
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      DATABASE_URL: postgresql+psycopg2://postgres:postgres@db:5432/castanea
+      REDIS_URL: redis://redis:6379/0
+      INDEX_PERSIST_DIR: /app/storage/index_v2
     volumes:
       - castanea_index_data:/app/storage
     depends_on:
@@ -42,19 +42,32 @@ services:
         condition: service_healthy
     command: >
       sh -c "if [ ! -d $$INDEX_PERSIST_DIR ];
-      then echo 'Index not found → running ingestion';
+      then echo 'Index not found - running ingestion';
       python -m scripts.ingest;
-      else echo 'Index already exists → skipping ingestion';
+      else echo 'Index already exists - skipping ingestion';
       fi"
+    restart: "no"
+
+  reingest:
+    build: .
+    env_file:
+      - .env
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      INDEX_PERSIST_DIR: /app/storage/index_v2
+    volumes:
+      - ./:/app
+      - castanea_index_data:/app/storage
+    command: ["python", "-m", "scripts.ingest"]
     restart: "no"
 
   db:
     image: postgis/postgis:16-3.4
     container_name: castaneagpt_db
     environment:
-      - POSTGRES_DB=castanea
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      POSTGRES_DB: castanea
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
     ports:
       - "5432:5432"
     volumes:

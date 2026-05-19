@@ -40,9 +40,104 @@ from typing import Dict, List
 class QuizEngine:
 
     OPTION_LETTERS = ["A", "B", "C", "D"]
+    TOPIC_CONFIG = {
+        "general chestnut knowledge": {
+            "label": "General",
+            "retrieval_query": (
+                "general chestnut knowledge Castanea sativa chestnut forests "
+                "management ecology silviculture pathology economics cultural role"
+            ),
+            "focus_instruction": (
+                "Cover broad chestnut knowledge across ecology, management, uses, risks, and cultural relevance."
+            ),
+        },
+        "chestnut silviculture": {
+            "label": "Silviculture",
+            "retrieval_query": (
+                "chestnut silviculture Castanea sativa coppice high forest stand treatment "
+                "regeneration thinning pruning rotation management"
+            ),
+            "focus_instruction": (
+                "Focus on stand structure, regeneration, tending, thinning, coppice systems, and silvicultural decisions."
+            ),
+        },
+        "chestnut forest operations": {
+            "label": "Forest Operations",
+            "retrieval_query": (
+                "chestnut forest operations harvesting extraction logging access machinery "
+                "worksite planning safety assortments transport"
+            ),
+            "focus_instruction": (
+                "Focus on harvesting, extraction, operational planning, timber assortments, access, and worksite constraints."
+            ),
+        },
+        "chestnut pests and diseases": {
+            "label": "Pests and diseases",
+            "retrieval_query": (
+                "chestnut pests and diseases pathology blight ink disease gall wasp "
+                "symptoms diagnosis prevention management"
+            ),
+            "focus_instruction": (
+                "Focus on pests, pathogens, symptoms, diagnosis, prevention, and management responses."
+            ),
+        },
+        "chestnut ecology": {
+            "label": "Ecology",
+            "retrieval_query": (
+                "chestnut ecology Castanea sativa habitat soils climate biodiversity "
+                "ecosystem site suitability resilience"
+            ),
+            "focus_instruction": (
+                "Focus on habitat, soils, climate, biodiversity, ecosystem dynamics, and environmental suitability."
+            ),
+        },
+        "chestnut economics": {
+            "label": "Economics",
+            "retrieval_query": (
+                "chestnut economics value chain production timber fruit market costs labor "
+                "rural income management economics"
+            ),
+            "focus_instruction": (
+                "Focus on production value, market uses, costs, labor, revenues, and economic trade-offs."
+            ),
+        },
+        "chestnut cultural role": {
+            "label": "Cultural role",
+            "retrieval_query": (
+                "chestnut cultural role heritage tradition rural landscape food culture "
+                "community historical importance chestnut"
+            ),
+            "focus_instruction": (
+                "Focus on heritage, traditions, landscape identity, food culture, and social importance."
+            ),
+        },
+    }
 
     def __init__(self):
         self.active_quizzes: Dict[str, List[Question]] = {}
+        self.recent_question_history: Dict[str, List[str]] = {}
+        self.quiz_generation_counts: Dict[str, int] = {}
+
+    def _settings_key(
+        self,
+        topic: str,
+        difficulty: str,
+        format_type: str,
+        language: str,
+    ) -> str:
+        return "|".join(
+            [
+                str(topic).strip().lower(),
+                str(difficulty).strip().lower(),
+                str(format_type).strip().lower(),
+                str(language).strip().lower(),
+            ]
+        )
+
+    def _question_signature(self, question_text: str) -> str:
+        normalized = re.sub(r"\s+", " ", str(question_text or "").strip().lower())
+        normalized = re.sub(r"[^a-z0-9àèéìíîòóùüäößç ]+", "", normalized)
+        return normalized[:220]
 
     def _split_option_label(self, option: str) -> tuple[Optional[str], str]:
         text = str(option or "").strip()
@@ -88,12 +183,41 @@ class QuizEngine:
     # Retrieve knowledge from RAG
     # -----------------------------------------
 
-    def retrieve_context(self, topic: str, top_k: int = 5):
+    def _topic_settings(self, topic: str) -> dict:
+        return self.TOPIC_CONFIG.get(topic, self.TOPIC_CONFIG["general chestnut knowledge"])
 
-        nodes = get_hybrid_retriever().retrieve(topic)
+    def retrieve_context(self, topic: str, variant_index: int = 0, top_k: int = 5):
+        topic_settings = self._topic_settings(topic)
+        retrieval_query = topic_settings["retrieval_query"]
+
+        nodes = get_hybrid_retriever().retrieve(retrieval_query)
+
+        node_list = list(nodes)
+        if not node_list:
+            return ""
+
+        pool_size = min(len(node_list), max(top_k * 3, top_k))
+        candidate_nodes = node_list[:pool_size]
+        start = 0 if pool_size <= top_k else (variant_index * 2) % pool_size
+
+        selected_nodes = []
+        used_texts = set()
+        for step in range(pool_size):
+            node = candidate_nodes[(start + step) % pool_size]
+            try:
+                node_text = node.node.text
+            except Exception:
+                node_text = str(node)
+            signature = self._question_signature(node_text[:300])
+            if signature in used_texts:
+                continue
+            used_texts.add(signature)
+            selected_nodes.append(node)
+            if len(selected_nodes) >= top_k:
+                break
 
         context_blocks = []
-        for n in nodes[:top_k]:
+        for n in selected_nodes:
             try:
                 context_blocks.append(n.node.text)
             except Exception:
@@ -137,7 +261,11 @@ class QuizEngine:
         language: str = "auto"
     ):
 
-        context = self.retrieve_context(topic)
+        topic_settings = self._topic_settings(topic)
+        settings_key = self._settings_key(topic, difficulty, format_type, language)
+        variant_index = self.quiz_generation_counts.get(settings_key, 0)
+        context = self.retrieve_context(topic, variant_index=variant_index)
+        recent_questions = self.recent_question_history.get(settings_key, [])[-10:]
 
         lang_map = {
             "en": "English",
@@ -155,18 +283,21 @@ The entire quiz (questions, options, and explanations) must be written in {lang_
 Do not use any other language.
 """
 
+        avoid_repeat_instruction = ""
+        if recent_questions:
+            formatted_recent = "\n".join(f"- {question}" for question in recent_questions)
+            avoid_repeat_instruction = f"""
+Avoid repeating or lightly rephrasing these recent quiz questions for the same settings:
+{formatted_recent}
+
+The new questions must test different aspects, scenarios, or source details.
+"""
+
         prompt = f"""
 You are an expert in forestry and chestnut cultivation.
 Use ONLY the knowledge in the context below to generate quiz questions.
-Avoid trivia such as dates or institutions.
 Prefer conceptual forestry knowledge and management practices.
-
-Question style examples:
-- Which silvicultural system is traditionally used for managing Castanea sativa stands in southern Europe?
-- What is a typical ecological advantage of coppice management in chestnut forests?
-- Which symptom most clearly indicates infection by chestnut blight (Cryphonectria parasitica)?
-- Why can chestnut trees respond well to coppicing after harvesting?
-- Why is coppicing effective for chestnut stands?
+Avoid overusing any single regional case study or country background across the quiz.
 
 Avoid questions about:
 - dates
@@ -175,6 +306,9 @@ Avoid questions about:
 - historical trivia
 
 Focus on conceptual and applied forestry knowledge.
+For this quiz, prioritize the following thematic focus:
+{topic_settings["focus_instruction"]}
+{avoid_repeat_instruction}
 
 Context:
 {context}
@@ -183,7 +317,7 @@ Task:
 Generate {n_questions} {difficulty} quiz questions.
 
 Topic:
-{topic}
+{topic_settings["label"]}
 
 Format:
 {format_type}
@@ -207,7 +341,7 @@ Structure:
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
-            temperature=0,
+            temperature=0.2,
             messages=[
                 {"role": "system", "content": "You generate quiz questions."},
                 {"role": "user", "content": prompt}
@@ -237,6 +371,8 @@ Structure:
         # -----------------------------------------
 
         questions = []
+        fallback_questions = []
+        recent_signatures = set(recent_questions)
 
         for q in data:
 
@@ -266,10 +402,27 @@ Structure:
                 explanation=q["explanation"]
             )
 
-            questions.append(question)
+            signature = self._question_signature(question.question)
+            if signature in recent_signatures:
+                fallback_questions.append(question)
+            else:
+                questions.append(question)
+
+        if len(questions) < n_questions:
+            for question in fallback_questions:
+                questions.append(question)
+                if len(questions) >= n_questions:
+                    break
 
         if len(questions) == 0:
             raise ValueError("No valid quiz questions generated")
+
+        stored_signatures = self.recent_question_history.get(settings_key, [])
+        stored_signatures.extend(
+            self._question_signature(question.question) for question in questions
+        )
+        self.recent_question_history[settings_key] = stored_signatures[-24:]
+        self.quiz_generation_counts[settings_key] = variant_index + 1
 
         quiz_id = str(uuid.uuid4())
         self.active_quizzes[quiz_id] = questions

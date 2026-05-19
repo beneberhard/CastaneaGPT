@@ -4,3 +4,10 @@ storage/
 data/NDVI_rasters/
 data/corpus_clean/
 data/tmp/
+
+# Local/generated files
+.DS_Store
+**/.DS_Store
+__pycache__/
+**/__pycache__/
+*.py[cod]

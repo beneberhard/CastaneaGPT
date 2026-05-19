@@ -1,9 +1,17 @@
 def build_response_policy(mode: str, verbosity: str, language: str, cite_style: str) -> str:
+    language_names = {
+        "auto": None,
+        "en": "English",
+        "it": "Italian",
+        "de": "German",
+    }
+
     # Language rule (auto -> follow user)
     if not language or language == "auto":
         lang_rule = "- Write in the SAME LANGUAGE as the user's last message."
     else:
-        lang_rule = f"- Write in {language}."
+        target_language = language_names.get(str(language).strip().lower(), str(language))
+        lang_rule = f"- Write ENTIRELY in {target_language}."
 
     # Verbosity constraints
     if verbosity == "short":
@@ -53,13 +61,15 @@ def build_response_policy(mode: str, verbosity: str, language: str, cite_style: 
     # Citation formatting
     if cite_style == "end":
         cite_rules = (
-            "- Put citations at the end under a 'Sources' section.\n"
-            "- Include 3–6 key citations only.\n"
+            "- Use source-numbered citations: exact identifiers from context, e.g. [Source 1].\n"
+            "- Include a short 'Evidence used' line at the end with 3–6 cited identifiers.\n"
+            "- Do not invent author-year or bibliographic citations.\n"
         )
     else:
         cite_rules = (
-            "- Put citations inline right after the relevant sentence.\n"
-            "- Include 3–6 key citations only.\n"
+            "- Use source-numbered inline citations: exact identifiers from context, e.g. [Source 1].\n"
+            "- Cite each substantive recommendation, definition, or factual claim with one or more source identifiers.\n"
+            "- Do not invent author-year or bibliographic citations.\n"
         )
 
     return f"""
@@ -71,8 +81,12 @@ LANGUAGE:
 GROUNDING (non-negotiable):
 - Use ONLY the provided sources and the grounded answer.
 - Do NOT add new facts, numbers, thresholds, names, or claims not supported by sources.
-- If the sources are insufficient for a requested detail, say exactly what is missing.
+- If the context is insufficient, incomplete, or ambiguous, explicitly state this rather than guessing or hallucinating.
 - You MAY rephrase and explain, but you must not extend the factual content.
+- Synthesize across retrieved sources into one coherent, smooth, and readable answer.
+- Avoid overconfident or absolute statements. When evidence varies, express results as ranges, conditions, or typical values.
+- Do not arbitrarily select a single value if multiple values are reported; reflect variability in a concise way.
+- Maintain clarity and accessibility for diverse users (from practitioners to non-experts), without oversimplifying the scientific content.
 
 STYLE:
 {length_rules}

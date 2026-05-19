@@ -140,10 +140,12 @@ def chat(req: ChatRequest):
     # Memory block
     # -----------------------------
     memory_block = ""
+    recent_source_keys = []
 
     if req.use_session_memory and session_id:
         mem = session_store.get(session_id)
         memory_block = format_memory(mem.turns)
+        recent_source_keys = list(mem.recent_source_keys)
 
     # -----------------------------
     # Stand context injection
@@ -194,6 +196,7 @@ def chat(req: ChatRequest):
         language=language,
         cite_style=cite_style,
         language_hint_text=req.query,
+        recent_source_keys=recent_source_keys,
     )
 
     final_answer = rag_out.get("answer", "")
@@ -217,6 +220,7 @@ def chat(req: ChatRequest):
         seen.add(key)
 
         normalized_sources.append({
+            "id": s.get("id"),
             "label": label,
             "page": page,
             "score": score,
@@ -227,10 +231,11 @@ def chat(req: ChatRequest):
     # Citation formatting
     # -----------------------------
     if cite_style != "none" and normalized_sources:
-        citation_text = "\n\nSources:\n"
+        citation_text = "\n\nSource reference list:\n"
 
-        for i, s in enumerate(normalized_sources[:5]):
-            citation_text += f"[{i+1}] {s['label']}"
+        for s in normalized_sources[:8]:
+            source_id = s.get("id") or "?"
+            citation_text += f"[Source {source_id}] {s['label']}"
             if s["page"]:
                 citation_text += f", p.{s['page']}"
             citation_text += "\n"
@@ -243,18 +248,23 @@ def chat(req: ChatRequest):
     if req.use_session_memory and session_id:
         session_store.append(session_id, "user", req.query)
         session_store.append(session_id, "assistant", final_answer)
+        session_store.set_recent_sources(
+            session_id,
+            [s.get("source_key") or s.get("label") or "" for s in sources[:8]],
+        )
 
     # -----------------------------
     # Compact sources for frontend
     # -----------------------------
     compact_sources = [
         {
+            "id": s["id"],
             "label": s["label"],
             "page": s["page"],
             "score": s["score"],
             "snippet": s["snippet"],
         }
-        for s in normalized_sources[:5]
+        for s in normalized_sources[:8]
     ]
 
     return {
@@ -304,16 +314,61 @@ def map_view():
     .section { margin-top: 12px; }
     .mono { font-family: ui-monospace, monospace; font-size: 12px; }
 
+    label {
+      display: block;
+      margin-top: 10px;
+      margin-bottom: 4px;
+    }
+
+    select {
+      display: block;
+      width: 100%;
+      margin-bottom: 6px;
+    }
+
     textarea {
       width: 100%;
       min-height: 60px;
       resize: vertical;
       padding: 6px;
+      margin-top: 10px;
     }
 
     button {
       padding: 6px 10px;
       cursor: pointer;
+      margin-top: 10px;
+    }
+
+    .stand-row {
+      display: flex;
+      gap: 6px;
+      align-items: flex-start;
+      margin-bottom: 6px;
+    }
+
+    .stand-row button {
+      margin-top: 0;
+    }
+
+    .stand-row .stand-main-btn {
+      flex: 1;
+    }
+
+    .stand-row .stand-toggle-btn {
+      white-space: nowrap;
+      font-size: 12px;
+    }
+
+    .button-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 10px;
+    }
+
+    .button-row button {
+      margin-top: 0;
     }
 
     .answer {
@@ -333,7 +388,7 @@ def map_view():
 
 
 <div class="panel">
-  <div><b>CastaneaGPT</b> – Geo Decision Demo</div>
+  <div><b>CastaneaGPT</b></div>
 
   <div class="section">
     <div id="status" class="mono">Loading stands…</div>
@@ -344,58 +399,65 @@ def map_view():
 
   <!-- ✅ NEW: Stand list section -->
   <div class="section">
-    <b>Available stands</b>
+    <b>Particelle disponibili / Available stands</b>
     <div id="standList"></div>
   </div>
 
   <div class="section">
-    <b>Ask about this stand</b>
-    <label>Mode:</label>
+    <b>Chiedi informazioni in generale e su questa particella / Ask general questions and questions about this stand</b>
+    <label>Modalita / Mode:</label>
     <select id="modeSelect">
-      <option value="professional">Professional</option>
-      <option value="decision" selected>Decision Support</option>
-      <option value="playful">Playful</option>
+      <option value="professional">Professionale / Professional</option>
+      <option value="decision" selected>Supporto decisionale / Decision Support</option>
+      <option value="playful">Giocoso / Playful</option>
     </select>
 
-    <label>Verbosity:</label>
+    <label>Livello di dettaglio / Verbosity:</label>
     <select id="verbositySelect">
-      <option value="short">Low</option>
-      <option value="normal" selected>Medium</option>
-      <option value="long">High</option>
+      <option value="short">Basso / Low</option>
+      <option value="normal" selected>Medio / Medium</option>
+      <option value="long">Alto / High</option>
     </select>
 
-    <label>Language:</label>
+    <label>Lingua / Language:</label>
     <select id="languageSelect">
-      <option value="en" selected>English</option>
-      <option value="it">Italian</option>
-      <option value="auto">Auto</option>
+      <option value="auto" selected>Auto</option>
+      <option value="en">English</option>
+      <option value="it">Italiano</option>
+      <option value="de">Deutsch</option>
     </select>
 
     <textarea id="chatInput"
               placeholder="e.g. What thinning intervention is recommended this year?"></textarea>
-    <button id="askBtn">Ask</button>
+    <div class="button-row">
+      <button id="askBtn">Chiedi / Ask</button>
+      <button id="toggleAnswerBtn">Nascondi / Hide</button>
+    </div>
     <div id="answerBox" class="answer"></div>
   </div>
 
   <div class="section">
-    <b>Chestnut Knowledge Quiz</b>
+    <b>Quiz sulla conoscenza del castagno / Chestnut Knowledge Quiz</b>
 
-    <label>Topic:</label>
+    <label>Tema / Topic:</label>
     <select id="quiz-topic">
-      <option value="general chestnut knowledge">General</option>
-      <option value="Castanea sativa management">Management</option>
-      <option value="coppice systems">Coppice systems</option>
-      <option value="chestnut pests and diseases">Pests and diseases</option>
+      <option value="general chestnut knowledge">Generale / General</option>
+      <option value="chestnut silviculture">Selvicoltura / Silviculture</option>
+      <option value="chestnut forest operations">Utilizzazioni forestali / Forest Operations</option>
+      <option value="chestnut pests and diseases">Parassiti e malattie / Pests and diseases</option>
+      <option value="chestnut ecology">Ecologia / Ecology</option>
+      <option value="chestnut economics">Economia / Economics</option>
+      <option value="chestnut cultural role">Ruolo culturale / Cultural role</option>
     </select>
 
-    <label>Difficulty:</label>
+    <label>Difficolta / Difficulty:</label>
     <select id="quiz-difficulty">
-      <option value="beginner">Beginner</option>
-      <option value="intermediate" selected>Intermediate</option>
-      <option value="advanced">Advanced</option>
+      <option value="beginner">Principiante / Beginner</option>
+      <option value="intermediate" selected>Intermedio / Intermediate</option>
+      <option value="advanced">Avanzato / Advanced</option>
     </select>
 
-    <label>Language:</label>
+    <label>Lingua / Language:</label>
     <select id="quiz-language">
       <option value="auto" selected>Auto</option>
       <option value="en">English</option>
@@ -403,7 +465,7 @@ def map_view():
       <option value="de">Deutsch</option>
     </select>
 
-    <button id="quiz-start" onclick="startQuiz()">Start Quiz</button>
+    <button id="quiz-start" onclick="startQuiz()">Avvia quiz / Start Quiz</button>
     <div id="quiz-container"></div>
   </div>
 </div>
@@ -411,6 +473,101 @@ def map_view():
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
+const UI_TRANSLATIONS = {
+  auto: {
+    loadingStands: "Loading stands…",
+    noStandsInView: "No stands found in the current map view.",
+    loadingStandSummary: (standId) => `Loading stand ${standId} summary…`,
+    failedStandSummary: "Failed to load stand summary.",
+    ndviTitle: "NDVI",
+    noNdvi: "No NDVI data available.",
+    latest: "Latest",
+    mean: "Mean",
+    min: "Min",
+    max: "Max",
+    timeSeries: "Time series",
+    noTimeSeries: "No time series available.",
+    species: "Species",
+    management: "Management",
+    ageClass: "Age class",
+    areaHa: "Area (ha)",
+    altitudeM: "Altitude (m)",
+    notes: "Notes",
+    standSelected: (standId) => `Stand ${standId} selected.`,
+    loadedStands: (count) => `Loaded ${count} stand(s) in view.`,
+    loadedNoStands: "Loaded 0 stands. The database may be empty, or the stands may be outside the current map extent.",
+  },
+  en: {
+    loadingStands: "Loading stands…",
+    noStandsInView: "No stands found in the current map view.",
+    loadingStandSummary: (standId) => `Loading stand ${standId} summary…`,
+    failedStandSummary: "Failed to load stand summary.",
+    ndviTitle: "NDVI",
+    noNdvi: "No NDVI data available.",
+    latest: "Latest",
+    mean: "Mean",
+    min: "Min",
+    max: "Max",
+    timeSeries: "Time series",
+    noTimeSeries: "No time series available.",
+    species: "Species",
+    management: "Management",
+    ageClass: "Age class",
+    areaHa: "Area (ha)",
+    altitudeM: "Altitude (m)",
+    notes: "Notes",
+    standSelected: (standId) => `Stand ${standId} selected.`,
+    loadedStands: (count) => `Loaded ${count} stand(s) in view.`,
+    loadedNoStands: "Loaded 0 stands. The database may be empty, or the stands may be outside the current map extent.",
+  },
+  it: {
+    loadingStands: "Caricamento particelle…",
+    noStandsInView: "Nessuna particella trovata nell'area visibile della mappa.",
+    loadingStandSummary: (standId) => `Caricamento riepilogo della particella ${standId}…`,
+    failedStandSummary: "Impossibile caricare il riepilogo della particella.",
+    ndviTitle: "NDVI",
+    noNdvi: "Nessun dato NDVI disponibile.",
+    latest: "Ultimo",
+    mean: "Media",
+    min: "Min",
+    max: "Max",
+    timeSeries: "Serie temporale",
+    noTimeSeries: "Nessuna serie temporale disponibile.",
+    species: "Specie",
+    management: "Gestione",
+    ageClass: "Classe di eta",
+    areaHa: "Superficie (ha)",
+    altitudeM: "Altitudine (m)",
+    notes: "Note",
+    standSelected: (standId) => `Particella ${standId} selezionata.`,
+    loadedStands: (count) => `${count} particella/e caricate nella vista.`,
+    loadedNoStands: "Caricate 0 particelle. Il database potrebbe essere vuoto oppure le particelle potrebbero trovarsi fuori dall'area visibile.",
+  },
+  de: {
+    loadingStands: "Bestaende werden geladen…",
+    noStandsInView: "Keine Bestaende im aktuellen Kartenausschnitt gefunden.",
+    loadingStandSummary: (standId) => `Zusammenfassung fuer Bestand ${standId} wird geladen…`,
+    failedStandSummary: "Zusammenfassung des Bestands konnte nicht geladen werden.",
+    ndviTitle: "NDVI",
+    noNdvi: "Keine NDVI-Daten verfuegbar.",
+    latest: "Neuester Wert",
+    mean: "Mittelwert",
+    min: "Min",
+    max: "Max",
+    timeSeries: "Zeitreihe",
+    noTimeSeries: "Keine Zeitreihe verfuegbar.",
+    species: "Art",
+    management: "Bewirtschaftung",
+    ageClass: "Altersklasse",
+    areaHa: "Flaeche (ha)",
+    altitudeM: "Hoehe (m)",
+    notes: "Hinweise",
+    standSelected: (standId) => `Bestand ${standId} ausgewaehlt.`,
+    loadedStands: (count) => `${count} Bestand/Bestaende im Kartenausschnitt geladen.`,
+    loadedNoStands: "0 Bestaende geladen. Die Datenbank koennte leer sein oder die Bestaende liegen ausserhalb des aktuellen Kartenausschnitts.",
+  },
+};
+
 const map = L.map('map').setView([43.0, 12.5], 6);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -421,10 +578,92 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 let standsLayer = null;
 let didAutoFit = false;
 let selectedStandId = null;
+let selectedStandSummary = null;
+let selectedStandNdvi = null;
+let selectedStandCollapsed = false;
+let lastStandFeatureCollection = null;
+let answerCollapsed = false;
+
+function getUiLanguage() {
+  const value = document.getElementById("languageSelect")?.value || "auto";
+  return UI_TRANSLATIONS[value] ? value : "auto";
+}
+
+function t() {
+  return UI_TRANSLATIONS[getUiLanguage()];
+}
+
+function formatMaybeEmpty(value) {
+  return value == null || value === "" ? "-" : value;
+}
+
+function updateAnswerVisibility() {
+  const answerBox = document.getElementById("answerBox");
+  const toggleAnswerBtn = document.getElementById("toggleAnswerBtn");
+  if (!answerBox || !toggleAnswerBtn) return;
+
+  answerBox.style.display = answerCollapsed ? "none" : "block";
+  toggleAnswerBtn.textContent = answerCollapsed ? "Mostra / Show" : "Nascondi / Hide";
+}
 
 function bboxParam() {
   const b = map.getBounds();
   return `${b.getWest()},${b.getSouth()},${b.getEast()},${b.getNorth()}`;
+}
+
+function standToggleLabel(standId) {
+  if (selectedStandId === standId && selectedStandSummary && !selectedStandCollapsed) {
+    return "Nascondi / Hide";
+  }
+  return "Mostra / Show";
+}
+
+function setHighlight(feature) {
+  if (!feature) return;
+
+  const layer = L.geoJSON(feature).addTo(map);
+  map.fitBounds(layer.getBounds().pad(0.3));
+
+  if (window._highlight) map.removeLayer(window._highlight);
+  window._highlight = layer;
+}
+
+async function loadSelectedStand(standId, feature = null) {
+  const status = document.getElementById('status');
+  if (!standId) return;
+
+  selectedStandId = standId;
+  selectedStandCollapsed = false;
+
+  if (feature) {
+    setHighlight(feature);
+  }
+
+  status.textContent = t().loadingStandSummary(standId);
+
+  const resSummary = await fetch(`/geo/stands/${standId}/summary`);
+  if (!resSummary.ok) {
+    status.textContent = t().failedStandSummary;
+    return;
+  }
+
+  selectedStandSummary = await resSummary.json();
+  selectedStandNdvi = null;
+
+  try {
+    const resNdvi = await fetch(`/geo/stands/${standId}/ndvi`);
+    if (resNdvi.ok) {
+      selectedStandNdvi = await resNdvi.json();
+    }
+  } catch (e) {
+    console.error("NDVI fetch error:", e);
+  }
+
+  renderSelectedStand();
+  if (lastStandFeatureCollection) {
+    renderStandList(lastStandFeatureCollection);
+  }
+  status.textContent = t().standSelected(standId);
 }
 
 
@@ -435,7 +674,7 @@ function renderStandList(fc) {
   const features = Array.isArray(fc.features) ? fc.features : [];
 
   if (!features.length) {
-    container.innerHTML = "<div style='color:#666;'>No stands found in the current map view.</div>";
+    container.innerHTML = `<div style='color:#666;'>${t().noStandsInView}</div>`;
     return;
   }
 
@@ -443,22 +682,35 @@ function renderStandList(fc) {
     const p = f.properties || {};
     const standId = p.id;
 
+    const row = document.createElement("div");
+    row.className = "stand-row";
+
     const btn = document.createElement("button");
-    btn.textContent = "Stand " + standId;
-    btn.style.display = "block";
-    btn.style.marginBottom = "6px";
+    btn.className = "stand-main-btn";
+    btn.textContent = "Particella / Stand " + standId;
 
-    btn.onclick = () => {
-      selectedStandId = standId;
-
-      const layer = L.geoJSON(f).addTo(map);
-      map.fitBounds(layer.getBounds().pad(0.3));
-
-      if (window._highlight) map.removeLayer(window._highlight);
-      window._highlight = layer;
+    btn.onclick = async () => {
+      await loadSelectedStand(standId, f);
     };
 
-    container.appendChild(btn);
+    const toggleBtn = document.createElement("button");
+    toggleBtn.className = "stand-toggle-btn";
+    toggleBtn.textContent = standToggleLabel(standId);
+    toggleBtn.onclick = async () => {
+      if (selectedStandId !== standId || !selectedStandSummary) {
+        await loadSelectedStand(standId, f);
+      }
+
+      selectedStandCollapsed = !selectedStandCollapsed;
+      renderSelectedStand();
+      if (lastStandFeatureCollection) {
+        renderStandList(lastStandFeatureCollection);
+      }
+    };
+
+    row.appendChild(btn);
+    row.appendChild(toggleBtn);
+    container.appendChild(row);
   });
 }
 
@@ -469,24 +721,34 @@ function formatNdviValue(value) {
 
 
 function buildNdviHtml(ndvi) {
-  const emptyHtml = "<br><b>NDVI</b><br><span style='color:#666;'>No NDVI data available.</span>";
+  const labels = t();
+  const emptyHtml = `<br><b>${labels.ndviTitle}</b><br><span style='color:#666;'>${labels.noNdvi}</span>`;
 
   if (!ndvi) {
     return emptyHtml;
   }
 
   const latest = ndvi.latest ? ndvi.latest : null;
-  const series = Array.isArray(ndvi.series) ? ndvi.series : [];
+  const series = Array.isArray(ndvi.series) ? [...ndvi.series] : [];
+  series.sort((a, b) => {
+    const monthA = typeof a.month === "number" ? a.month : 99;
+    const monthB = typeof b.month === "number" ? b.month : 99;
+    if (monthA !== monthB) return monthA - monthB;
 
-  let html = "<br><b>NDVI</b><br>";
-  html += "Latest (" + (latest && latest.label ? latest.label : "-") + ")<br>";
-  html += "Mean: " + formatNdviValue(latest ? latest.mean : null) + "<br>";
-  html += "Min: " + formatNdviValue(latest ? latest.min : null) + "<br>";
-  html += "Max: " + formatNdviValue(latest ? latest.max : null) + "<br>";
-  html += "<br><b>Time series</b><br>";
+    const yearA = typeof a.year === "number" ? a.year : 9999;
+    const yearB = typeof b.year === "number" ? b.year : 9999;
+    return yearA - yearB;
+  });
+
+  let html = `<br><b>${labels.ndviTitle}</b><br>`;
+  html += labels.latest + " (" + (latest && latest.label ? latest.label : "-") + ")<br>";
+  html += labels.mean + ": " + formatNdviValue(latest ? latest.mean : null) + "<br>";
+  html += labels.min + ": " + formatNdviValue(latest ? latest.min : null) + "<br>";
+  html += labels.max + ": " + formatNdviValue(latest ? latest.max : null) + "<br>";
+  html += `<br><b>${labels.timeSeries}</b><br>`;
 
   if (!series.length) {
-    html += "<div>No time series available.</div>";
+    html += `<div>${labels.noTimeSeries}</div>`;
     return html;
   }
 
@@ -502,15 +764,44 @@ function buildNdviHtml(ndvi) {
   return html;
 }
 
+function renderSelectedStand() {
+  const picked = document.getElementById('picked');
+  if (!selectedStandSummary) {
+    picked.innerHTML = "";
+    return;
+  }
+
+  if (selectedStandCollapsed) {
+    picked.innerHTML = "<i>Informazioni sulla particella nascoste / Stand information hidden</i>";
+    return;
+  }
+
+  const labels = t();
+  const s = selectedStandSummary;
+  const ndviHtml = buildNdviHtml(selectedStandNdvi);
+
+  picked.innerHTML = `
+    <b>${formatMaybeEmpty(s.name)}</b><br>
+    ${labels.species}: ${formatMaybeEmpty(s.species)}<br>
+    ${labels.management}: ${formatMaybeEmpty(s.management_type)}<br>
+    ${labels.ageClass}: ${formatMaybeEmpty(s.age_class)}<br>
+    ${labels.areaHa}: ${formatMaybeEmpty(s.area_ha)}<br>
+    ${labels.altitudeM}: ${formatMaybeEmpty(s.altitude_m)}<br>
+    ${labels.notes}: ${formatMaybeEmpty(s.notes)}
+    ${ndviHtml}
+  `;
+}
+
 
 
 async function loadStands() {
   const status = document.getElementById('status');
-  status.textContent = 'Loading stands…';
+  status.textContent = t().loadingStands;
 
   const url = `/geo/stands?bbox=${encodeURIComponent(bboxParam())}`;
   const res = await fetch(url);
   const fc = await res.json();
+  lastStandFeatureCollection = fc;
 
   renderStandList(fc);
 
@@ -522,64 +813,22 @@ async function loadStands() {
         const p = feature.properties || {};
         const standId = p.id;
         if (!standId) return;
-
-        selectedStandId = standId;
-        status.textContent = `Loading stand ${standId} summary…`;
-
-        // -------------------------
-        // 1) Load summary
-        // -------------------------
-        const resSummary = await fetch(`/geo/stands/${standId}/summary`);
-        if (!resSummary.ok) {
-          status.textContent = "Failed to load stand summary.";
-          return;
-        }
-
-        const s = await resSummary.json();
-
-        // -------------------------
-        // 2) Load NDVI
-        // -------------------------
-        let ndviHtml = "<br><b>NDVI</b><br><span style='color:#666;'>No NDVI data available.</span>";
-
-        try {
-          const resNdvi = await fetch(`/geo/stands/${standId}/ndvi`);
-          if (resNdvi.ok) {
-            const ndvi = await resNdvi.json();
-            ndviHtml = buildNdviHtml(ndvi);
-          }
-        } catch (e) {
-          console.error("NDVI fetch error:", e);
-        }
-
-        // -------------------------
-        // 3) Render panel
-        // -------------------------
-        document.getElementById('picked').innerHTML = `
-          <b>${s.name}</b><br>
-          Species: ${s.species}<br>
-          Management: ${s.management_type}<br>
-          Age class: ${s.age_class}<br>
-          Area (ha): ${s.area_ha}<br>
-          Altitude (m): ${s.altitude_m}<br>
-          Notes: ${s.notes}
-          ${ndviHtml}
-        `;
-
-        status.textContent = `Stand ${standId} selected.`;
+        await loadSelectedStand(standId, feature);
       });
     }
   }).addTo(map);
 
   const n = (fc.features || []).length;
   status.textContent = n
-    ? `Loaded ${n} stand(s) in view.`
-    : 'Loaded 0 stands. The database may be empty, or the stands may be outside the current map extent.';
+    ? t().loadedStands(n)
+    : t().loadedNoStands;
 }
 
 
 document.getElementById("askBtn").addEventListener("click", async () => {
   const question = document.getElementById("chatInput").value.trim();
+  const askBtn = document.getElementById("askBtn");
+  const chatInput = document.getElementById("chatInput");
   const answerBox = document.getElementById("answerBox");
 
   if (!question) return;
@@ -588,32 +837,58 @@ document.getElementById("askBtn").addEventListener("click", async () => {
     return;
   }
 
+  askBtn.disabled = true;
+  chatInput.disabled = true;
+  answerCollapsed = false;
+  updateAnswerVisibility();
   answerBox.innerHTML = "<i>Thinking…</i>";
 
   const mode = document.getElementById("modeSelect").value;
   const verbosity = document.getElementById("verbositySelect").value;
   const language = document.getElementById("languageSelect").value;
 
-  const res = await fetch("/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      query: question,
-      stand_id: selectedStandId,
-      use_session_memory: false,
-      mode: mode,
-      verbosity: verbosity,
-      language: language,
-      cite_style: "inline"
-    })
-  });
+  try {
+    const res = await fetch("/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: question,
+        stand_id: selectedStandId,
+        use_session_memory: true,
+        mode: mode,
+        verbosity: verbosity,
+        language: language,
+        cite_style: "inline"
+      })
+    });
 
-  const data = await res.json();
-  answerBox.innerHTML = data.answer;
+    if (!res.ok) {
+      throw new Error("Chat request failed");
+    }
+
+    const data = await res.json();
+    answerBox.innerHTML = data.answer;
+  } catch (err) {
+    console.error("Chat request failed:", err);
+    answerBox.innerHTML = "<i>Request failed. Please try again.</i>";
+  } finally {
+    askBtn.disabled = false;
+    chatInput.disabled = false;
+  }
+});
+
+document.getElementById("toggleAnswerBtn").addEventListener("click", () => {
+  answerCollapsed = !answerCollapsed;
+  updateAnswerVisibility();
 });
 
 map.on('moveend', loadStands);
+document.getElementById("languageSelect").addEventListener("change", () => {
+  renderSelectedStand();
+  loadStands();
+});
 loadStands();
+updateAnswerVisibility();
 
 let currentQuizId = null;
 let currentQuestions = [];
@@ -624,7 +899,9 @@ let currentQuestions = [];
 // =======================
 async function startQuiz() {
   const startBtn = document.getElementById("quiz-start");
+  const container = document.getElementById("quiz-container");
   startBtn.disabled = true;
+  container.innerHTML = "<i>Generating quiz…</i>";
 
   const topic = document.getElementById("quiz-topic").value;
   const difficulty = document.getElementById("quiz-difficulty").value;
@@ -643,11 +920,15 @@ async function startQuiz() {
       })
     });
 
+    if (!res.ok) {
+      throw new Error("Quiz generation failed");
+    }
+
     const data = await res.json();
     console.log("QUIZ DATA:", data);
 
     if (!data.questions || data.questions.length === 0) {
-      alert("No quiz questions returned.");
+      container.innerHTML = "<i>No quiz questions returned.</i>";
       startBtn.disabled = false;
       return;
     }
@@ -658,7 +939,7 @@ async function startQuiz() {
     renderQuiz(currentQuestions);
   } catch (err) {
     console.error("Quiz generation failed:", err);
-    alert("Quiz generation failed.");
+    container.innerHTML = "<i>Quiz generation failed.</i>";
     startBtn.disabled = false;
   }
 }
@@ -695,8 +976,8 @@ function renderQuiz(questions) {
   });
 
   container.innerHTML += `
-    <button onclick="submitQuiz()" style="margin-top:10px;">
-      Submit Answers
+    <button id="quiz-submit" onclick="submitQuiz()" style="margin-top:10px;">
+      Invia risposte / Submit Answers
     </button>
   `;
 }
@@ -705,6 +986,8 @@ function renderQuiz(questions) {
 // SUBMIT QUIZ
 // =======================
 async function submitQuiz() {
+  const container = document.getElementById("quiz-container");
+  const submitBtn = document.getElementById("quiz-submit");
   const answers = {};
 
   currentQuestions.forEach(q => {
@@ -721,6 +1004,11 @@ async function submitQuiz() {
     return;
   }
 
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Correzione in corso... / Grading...";
+  }
+
   try {
     const res = await fetch("/quiz/grade", {
       method: "POST",
@@ -731,11 +1019,19 @@ async function submitQuiz() {
       })
     });
 
+    if (!res.ok) {
+      throw new Error("Quiz grading failed");
+    }
+
     const data = await res.json();
     showResults(data);
   } catch (err) {
     console.error("Quiz grading failed:", err);
-    alert("Quiz grading failed.");
+    container.innerHTML += "<div style='margin-top:10px; color:#666;'><i>Quiz grading failed.</i></div>";
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Invia risposte / Submit Answers";
+    }
   }
 }
 
@@ -784,7 +1080,7 @@ function showResults(data) {
 
   html += `
     <button onclick="restartQuiz()" style="margin-top:10px;">
-      Restart Quiz
+      Riavvia quiz / Restart Quiz
     </button>
   `;
 
