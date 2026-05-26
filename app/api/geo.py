@@ -12,26 +12,29 @@ router = APIRouter(prefix="/geo", tags=["geo"])
 def get_stands(
     bbox: str | None = Query(
         None,
-        description="minLon,minLat,maxLon,maxLat (EPSG:4326). If omitted, uses a default demo bbox."
+        description="minLon,minLat,maxLon,maxLat (EPSG:4326). If omitted, returns all stands."
     )
 ):
-    # Default bbox (Italy-ish). Adjust as you like.
     if not bbox:
-        minx, miny, maxx, maxy = 6.0, 36.0, 19.0, 47.5
+        sql = text("""
+            SELECT id, name, ST_AsGeoJSON(geom) AS geojson
+            FROM stands
+            WHERE geom IS NOT NULL
+            LIMIT 200;
+        """)
+        params = {}
     else:
         minx, miny, maxx, maxy = map(float, bbox.split(","))
-
-    sql = text("""
-        SELECT id, name, ST_AsGeoJSON(geom) AS geojson
-        FROM stands
-        WHERE geom && ST_MakeEnvelope(:minx, :miny, :maxx, :maxy, 4326)
-        LIMIT 200;
-    """)
+        sql = text("""
+            SELECT id, name, ST_AsGeoJSON(geom) AS geojson
+            FROM stands
+            WHERE geom && ST_MakeEnvelope(:minx, :miny, :maxx, :maxy, 4326)
+            LIMIT 200;
+        """)
+        params = {"minx": minx, "miny": miny, "maxx": maxx, "maxy": maxy}
 
     with get_engine().connect() as conn:
-        rows = conn.execute(
-            sql, {"minx": minx, "miny": miny, "maxx": maxx, "maxy": maxy}
-        ).fetchall()
+        rows = conn.execute(sql, params).fetchall()
 
     return {
         "type": "FeatureCollection",

@@ -794,11 +794,11 @@ function renderSelectedStand() {
 
 
 
-async function loadStands() {
+async function loadStands(options = {}) {
   const status = document.getElementById('status');
   status.textContent = t().loadingStands;
 
-  const url = `/geo/stands?bbox=${encodeURIComponent(bboxParam())}`;
+  const url = options.all ? "/geo/stands" : `/geo/stands?bbox=${encodeURIComponent(bboxParam())}`;
   const res = await fetch(url);
   const fc = await res.json();
   lastStandFeatureCollection = fc;
@@ -817,6 +817,11 @@ async function loadStands() {
       });
     }
   }).addTo(map);
+
+  if (options.fit && !didAutoFit && (fc.features || []).length) {
+    didAutoFit = true;
+    map.fitBounds(standsLayer.getBounds().pad(0.25));
+  }
 
   const n = (fc.features || []).length;
   status.textContent = n
@@ -887,7 +892,7 @@ document.getElementById("languageSelect").addEventListener("change", () => {
   renderSelectedStand();
   loadStands();
 });
-loadStands();
+loadStands({ all: true, fit: true });
 updateAnswerVisibility();
 
 let currentQuizId = null;

@@ -29,6 +29,9 @@ def load_glossary() -> list[dict[str, str]]:
     """Load glossary rows once and normalize whitespace."""
     rows: list[dict[str, str]] = []
 
+    if not GLOSSARY_CSV_PATH.exists():
+        return rows
+
     with GLOSSARY_CSV_PATH.open("r", encoding="utf-8-sig", newline="") as fh:
         reader = csv.DictReader(fh)
         for row in reader:
