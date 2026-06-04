@@ -371,6 +371,25 @@ def map_view():
       margin-top: 0;
     }
 
+    .stand-dot {
+      align-items: center;
+      background: #d40000;
+      border: 3px solid white;
+      border-radius: 50%;
+      box-shadow: 0 2px 9px rgba(0,0,0,0.45);
+      color: white;
+      display: flex;
+      font: 700 15px/1 system-ui, sans-serif;
+      height: 32px;
+      justify-content: center;
+      width: 32px;
+    }
+
+    .stand-dot-icon {
+      background: transparent;
+      border: 0;
+    }
+
     .answer {
       margin-top: 8px;
       font-size: 13px;
@@ -400,6 +419,9 @@ def map_view():
   <!-- ✅ NEW: Stand list section -->
   <div class="section">
     <b>Particelle disponibili / Available stands</b>
+    <div class="button-row">
+      <button id="showAllStandsBtn">Tutte le particelle / All stands</button>
+    </div>
     <div id="standList"></div>
   </div>
 
@@ -496,6 +518,7 @@ const UI_TRANSLATIONS = {
     standSelected: (standId) => `Stand ${standId} selected.`,
     loadedStands: (count) => `Loaded ${count} stand(s) in view.`,
     loadedNoStands: "Loaded 0 stands. The database may be empty, or the stands may be outside the current map extent.",
+    allStandsShown: "All stands shown.",
   },
   en: {
     loadingStands: "Loading stands…",
@@ -519,6 +542,7 @@ const UI_TRANSLATIONS = {
     standSelected: (standId) => `Stand ${standId} selected.`,
     loadedStands: (count) => `Loaded ${count} stand(s) in view.`,
     loadedNoStands: "Loaded 0 stands. The database may be empty, or the stands may be outside the current map extent.",
+    allStandsShown: "All stands shown.",
   },
   it: {
     loadingStands: "Caricamento particelle…",
@@ -542,6 +566,7 @@ const UI_TRANSLATIONS = {
     standSelected: (standId) => `Particella ${standId} selezionata.`,
     loadedStands: (count) => `${count} particella/e caricate nella vista.`,
     loadedNoStands: "Caricate 0 particelle. Il database potrebbe essere vuoto oppure le particelle potrebbero trovarsi fuori dall'area visibile.",
+    allStandsShown: "Tutte le particelle sono visibili.",
   },
   de: {
     loadingStands: "Bestaende werden geladen…",
@@ -565,6 +590,7 @@ const UI_TRANSLATIONS = {
     standSelected: (standId) => `Bestand ${standId} ausgewaehlt.`,
     loadedStands: (count) => `${count} Bestand/Bestaende im Kartenausschnitt geladen.`,
     loadedNoStands: "0 Bestaende geladen. Die Datenbank koennte leer sein oder die Bestaende liegen ausserhalb des aktuellen Kartenausschnitts.",
+    allStandsShown: "Alle Bestaende werden angezeigt.",
   },
 };
 
@@ -576,6 +602,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 }).addTo(map);
 
 let standsLayer = null;
+let standMarkersLayer = null;
 let didAutoFit = false;
 let selectedStandId = null;
 let selectedStandSummary = null;
@@ -583,6 +610,12 @@ let selectedStandNdvi = null;
 let selectedStandCollapsed = false;
 let lastStandFeatureCollection = null;
 let answerCollapsed = false;
+
+const STAND_LABELS = {
+  1: "1: Palummaro / Italy",
+  2: "2: Kissos / Greece",
+  3: "3: Nazilli / Türkiye",
+};
 
 function getUiLanguage() {
   const value = document.getElementById("languageSelect")?.value || "auto";
@@ -618,14 +651,62 @@ function standToggleLabel(standId) {
   return "Mostra / Show";
 }
 
+function standMainLabel(standId) {
+  return STAND_LABELS[standId] || `Particella / Stand ${standId}`;
+}
+
+function panelAwareFitBounds(bounds, options = {}) {
+  const panel = document.querySelector(".panel");
+  let leftPadding = 40;
+
+  if (panel) {
+    const rect = panel.getBoundingClientRect();
+    const mapWidth = map.getSize().x;
+    if (rect.left < mapWidth && rect.right > 0 && rect.width < mapWidth * 0.85) {
+      leftPadding = Math.ceil(rect.right + 36);
+    }
+  }
+
+  map.fitBounds(bounds, {
+    paddingTopLeft: L.point(leftPadding, 36),
+    paddingBottomRight: L.point(56, 56),
+    ...options,
+  });
+}
+
+function standFeatureCenter(feature) {
+  const layer = L.geoJSON(feature);
+  return layer.getBounds().getCenter();
+}
+
 function setHighlight(feature) {
   if (!feature) return;
 
   const layer = L.geoJSON(feature).addTo(map);
-  map.fitBounds(layer.getBounds().pad(0.3));
+  panelAwareFitBounds(layer.getBounds().pad(0.3), { maxZoom: 15 });
 
   if (window._highlight) map.removeLayer(window._highlight);
   window._highlight = layer;
+}
+
+function clearSelectedStand() {
+  selectedStandId = null;
+  selectedStandSummary = null;
+  selectedStandNdvi = null;
+  selectedStandCollapsed = false;
+  renderSelectedStand();
+
+  if (window._highlight) {
+    map.removeLayer(window._highlight);
+    window._highlight = null;
+  }
+}
+
+async function showAllStands() {
+  clearSelectedStand();
+  didAutoFit = false;
+  await loadStands({ all: true, fit: true });
+  document.getElementById('status').textContent = t().allStandsShown;
 }
 
 async function loadSelectedStand(standId, feature = null) {
@@ -687,7 +768,7 @@ function renderStandList(fc) {
 
     const btn = document.createElement("button");
     btn.className = "stand-main-btn";
-    btn.textContent = "Particella / Stand " + standId;
+    btn.textContent = standMainLabel(standId);
 
     btn.onclick = async () => {
       await loadSelectedStand(standId, f);
@@ -712,6 +793,42 @@ function renderStandList(fc) {
     row.appendChild(toggleBtn);
     container.appendChild(row);
   });
+}
+
+function renderStandMarkers(fc) {
+  if (standMarkersLayer) {
+    standMarkersLayer.remove();
+  }
+
+  const features = Array.isArray(fc.features) ? fc.features : [];
+  const markers = features
+    .filter(feature => feature && feature.geometry)
+    .map(feature => {
+      const standId = feature.properties && feature.properties.id;
+      const marker = L.marker(standFeatureCenter(feature), {
+        icon: L.divIcon({
+          className: "stand-dot-icon",
+          html: `<div class="stand-dot">${standId}</div>`,
+          iconSize: [32, 32],
+          iconAnchor: [16, 16],
+        }),
+        zIndexOffset: 1000,
+      });
+
+      marker.bindTooltip(standMainLabel(standId), {
+        direction: "top",
+        offset: [0, -16],
+      });
+
+      marker.on("click", async () => {
+        if (!standId) return;
+        await loadSelectedStand(standId, feature);
+      });
+
+      return marker;
+    });
+
+  standMarkersLayer = L.layerGroup(markers).addTo(map);
 }
 
 
@@ -804,6 +921,7 @@ async function loadStands(options = {}) {
   lastStandFeatureCollection = fc;
 
   renderStandList(fc);
+  renderStandMarkers(fc);
 
   if (standsLayer) standsLayer.remove();
 
@@ -820,7 +938,7 @@ async function loadStands(options = {}) {
 
   if (options.fit && !didAutoFit && (fc.features || []).length) {
     didAutoFit = true;
-    map.fitBounds(standsLayer.getBounds().pad(0.25));
+    panelAwareFitBounds(standsLayer.getBounds().pad(0.25));
   }
 
   const n = (fc.features || []).length;
@@ -886,6 +1004,8 @@ document.getElementById("toggleAnswerBtn").addEventListener("click", () => {
   answerCollapsed = !answerCollapsed;
   updateAnswerVisibility();
 });
+
+document.getElementById("showAllStandsBtn").addEventListener("click", showAllStands);
 
 map.on('moveend', loadStands);
 document.getElementById("languageSelect").addEventListener("change", () => {

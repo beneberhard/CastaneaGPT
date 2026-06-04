@@ -123,3 +123,19 @@ git push
 ```
 
 the the commit is on the remote repository too.
+
+4.6.2026:
+Integrated stands Kissos (Greece) and Nazilli (Turkey). Uploaded NDVI raster layer for Nazilli (June 2016) based on Copernicus Data Space Ecosystem.
+Stand-scoped rasters are filtered by stand-id, so that e.g. Stand 3 only sees Stand 3 rasters etc.
+
+.tif and .tiff are both supported
+
+Single-stand information can be edited directly in QGis DB Manager, as long as it is connected to the PostGIS database used by the app.
+In the Browser panel in QGis open PostgreSQL -> public -> stands i.e. bring stands to the Layers panel. There, open the attribute table, and edit the stand metadata.
+
+When generating a NDVI file for a stand, make sure it has the same CRS as the stand polygon itself. Here EPSG 4326 WGS 84
+
+Changed the chat panel:
+Each button contains a stand's name.
+
+Added a red dot for each stand on the map, with tooltips and click behavior matching the polygons.

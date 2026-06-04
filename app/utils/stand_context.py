@@ -5,8 +5,18 @@ from pathlib import Path
 import numpy as np
 import rasterio
 from rasterio.mask import mask
+from rasterio.warp import transform_geom
 
 NDVI_DIR = Path("data/NDVI_rasters")
+
+STAND_NDVI_RE = re.compile(
+    r"(?:^|[_-])stand(?P<stand_id>\d+)(?:[_-].*)?[_-]ndvi[_-](?:(?P<day>\d{1,2})[_-])?(?P<month>\d{1,2})[_-](?P<year>\d{4})$",
+    re.IGNORECASE,
+)
+LEGACY_NDVI_RE = re.compile(
+    r"^ndvi[_-](?P<month>\d{1,2})[_-](?P<year>\d{4})$",
+    re.IGNORECASE,
+)
 
 NDVI_QUERY_PATTERNS = (
     # English
@@ -75,19 +85,68 @@ def should_include_ndvi_context(question: str) -> bool:
     return any(re.search(pattern, normalized) for pattern in NDVI_QUERY_PATTERNS)
 
 
-def compute_ndvi_stats(polygon_geojson):
+def parse_ndvi_raster_name(path):
+    """Return stand/date metadata parsed from an NDVI raster filename."""
+    stem = path.stem
+
+    match = STAND_NDVI_RE.search(stem)
+    if match:
+        return {
+            "stand_id": int(match.group("stand_id")),
+            "year": int(match.group("year")),
+            "month": int(match.group("month")),
+            "day": int(match.group("day")) if match.group("day") else None,
+        }
+
+    match = LEGACY_NDVI_RE.match(stem)
+    if match:
+        return {
+            "stand_id": None,
+            "year": int(match.group("year")),
+            "month": int(match.group("month")),
+            "day": None,
+        }
+
+    return None
+
+
+def iter_ndvi_rasters(stand_id=None):
+    """Yield NDVI raster paths and parsed metadata relevant for a stand."""
+    for tif in sorted([*NDVI_DIR.glob("*.tif"), *NDVI_DIR.glob("*.tiff")]):
+        metadata = parse_ndvi_raster_name(tif)
+
+        if not metadata:
+            continue
+
+        raster_stand_id = metadata["stand_id"]
+        if stand_id is not None and raster_stand_id is not None and raster_stand_id != stand_id:
+            continue
+
+        yield tif, metadata
+
+
+def compute_ndvi_stats(polygon_geojson, stand_id=None):
 
     results = {}
 
-    for tif in NDVI_DIR.glob("ndvi_*.tif"):
-
-        parts = tif.stem.split("_")
-        month = int(parts[1])
-        year = int(parts[2])
+    for tif, metadata in iter_ndvi_rasters(stand_id):
+        month = metadata["month"]
+        year = metadata["year"]
 
         with rasterio.open(tif) as src:
+            raster_polygon = polygon_geojson
+            if src.crs:
+                raster_polygon = [
+                    transform_geom("EPSG:4326", src.crs, geometry)
+                    for geometry in polygon_geojson
+                ]
 
-            out_img, _ = mask(src, polygon_geojson, crop=True)
+            try:
+                out_img, _ = mask(src, raster_polygon, crop=True)
+            except ValueError as e:
+                if "do not overlap" in str(e):
+                    continue
+                raise
 
             values = out_img[0]
             values = values[values != src.nodata]
@@ -128,7 +187,7 @@ def compute_ndvi_stats_for_stand(stand_id):
         return {}
 
     polygon = [json.loads(row[0])]
-    return compute_ndvi_stats(polygon)
+    return compute_ndvi_stats(polygon, stand_id=stand_id)
 
 
 def compare_ndvi(stats, year1, month1, year2, month2):
