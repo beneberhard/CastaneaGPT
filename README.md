@@ -18,6 +18,9 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 
 This adds the project bind mount and re-enables `uvicorn --reload` for iterative development on macOS.
 
+While editing always use the dev command (the development bind-mounted version), not the stable Docker image (in stable mode, Docker copies the code into the image at build time). Otherwise e.g. the API container may serve an older map (and newly generated features such as red dots denoting the demonstration stands, do not show up on the map.)!!!
+
+
 ## Dedicated/explicit Force Re-ingestion
 
 When you add or change source files under `data/corpus_raw`, force a corpus refresh with:
@@ -138,4 +141,8 @@ When generating a NDVI file for a stand, make sure it has the same CRS as the st
 Changed the chat panel:
 Each button contains a stand's name.
 
-Added a red dot for each stand on the map, with tooltips and click behavior matching the polygons.
+Added a red dot for each stand on the map, with tooltips and click behavior matching the polygons. app/api/api.py (line 354...; 658...)
+
+
+10.6.2026:
+Added stand Forchtenstein/Austria to PostGIS.

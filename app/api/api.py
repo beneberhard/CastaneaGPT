@@ -615,6 +615,7 @@ const STAND_LABELS = {
   1: "1: Palummaro / Italy",
   2: "2: Kissos / Greece",
   3: "3: Nazilli / Türkiye",
+  4: "4: Forchtenstein / Austria",
 };
 
 function getUiLanguage() {
