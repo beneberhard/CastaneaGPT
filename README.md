@@ -1,5 +1,12 @@
 # CastaneaGPT
 
+# Load the project
+
+````bash
+docker compose up -d
+```
+# CastaneaGPT runs on: http://127.0.0.1:8000/map
+
 ## Docker Compose Modes
 
 Stable default runtime:

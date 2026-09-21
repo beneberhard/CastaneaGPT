@@ -68,7 +68,10 @@ def build_response_policy(mode: str, verbosity: str, language: str, cite_style: 
     else:
         cite_rules = (
             "- Use source-numbered inline citations: exact identifiers from context, e.g. [Source 1].\n"
+            "- Place citations immediately after the sentence or bullet clause they support, not only at the end of the answer.\n"
             "- Cite each substantive recommendation, definition, or factual claim with one or more source identifiers.\n"
+            "- Every factual bullet or paragraph must contain at least one citation unless it explicitly says the sources are insufficient.\n"
+            "- Example: Chestnut fruit production depends on site quality and management intensity [Source 2].\n"
             "- Do not invent author-year or bibliographic citations.\n"
         )
 

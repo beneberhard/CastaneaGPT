@@ -5,6 +5,7 @@ It uses FastAPI to provide endpoints for querying the RAG system.
 """
 
 import uuid
+import re
 from typing import Optional, List, Dict
 
 from fastapi import FastAPI
@@ -53,6 +54,35 @@ def is_uuid(val: str) -> bool:
 def _enum_to_str(x) -> str:
     """Supports Enum values from Pydantic (e.g., AnswerMode.professional)."""
     return x.value if hasattr(x, "value") else str(x)
+
+
+def _has_source_citation(text: str) -> bool:
+    return bool(re.search(r"\[Source\s+\d+\]", text or ""))
+
+
+def _add_fallback_inline_citations(answer: str, source_ids: list[int]) -> str:
+    """Add conservative line-level citations only when the LLM omitted them entirely."""
+    if not answer or _has_source_citation(answer) or not source_ids:
+        return answer
+
+    fallback = " ".join(f"[Source {source_id}]" for source_id in source_ids[:2])
+    cited_lines = []
+
+    for line in answer.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            cited_lines.append(line)
+            continue
+
+        is_heading = stripped.endswith(":") or stripped.lower().startswith(("confidence:", "assumptions:"))
+        is_insufficient = "insufficient" in stripped.lower() or "not enough" in stripped.lower()
+        if is_heading or is_insufficient:
+            cited_lines.append(line)
+            continue
+
+        cited_lines.append(f"{line} {fallback}")
+
+    return "\n".join(cited_lines)
 
 
 # -----------------------------
@@ -206,18 +236,12 @@ def chat(req: ChatRequest):
     # Normalize sources
     # -----------------------------
     normalized_sources = []
-    seen = set()
 
-    for s in sources:
+    for s in sources[:8]:
         label = s.get("label") or s.get("source") or "document"
         snippet = (s.get("snippet") or "").strip()
         page = s.get("page")
         score = s.get("score")
-
-        key = (label, page)
-        if key in seen:
-            continue
-        seen.add(key)
 
         normalized_sources.append({
             "id": s.get("id"),
@@ -231,6 +255,9 @@ def chat(req: ChatRequest):
     # Citation formatting
     # -----------------------------
     if cite_style != "none" and normalized_sources:
+        source_ids = [s["id"] for s in normalized_sources if isinstance(s.get("id"), int)]
+        final_answer = _add_fallback_inline_citations(final_answer, source_ids)
+
         citation_text = "\n\nSource reference list:\n"
 
         for s in normalized_sources[:8]:
@@ -595,6 +622,7 @@ const UI_TRANSLATIONS = {
 };
 
 const map = L.map('map').setView([43.0, 12.5], 6);
+map.zoomControl.setPosition('topright');
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19,
