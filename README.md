@@ -38,6 +38,10 @@ The API service currently sets `OPENAI_MODEL=gpt-4o-mini` directly in `docker-co
 
 ### 2. Prepare the document collection
 
+The current version of this repository provides the application source code but does not include the documents used to build the RAG corpus. Users must obtain source documents separately, subject to their respective licenses and access conditions, and place them in `data/corpus_raw/` before building the index. This directory is excluded from Git tracking.
+
+A catalogue identifying the documents used in the study, with bibliographic references and source links, is planned for a future update. Until it is available, the repository alone does not provide everything needed to reconstruct the study's exact corpus.
+
 Ensure `data/corpus_raw/` contains readable source documents before starting. The ingestion script supports:
 
 | Source | Location |
@@ -155,7 +159,7 @@ app/
   llm_config.py         Chat and embedding model configuration
 scripts/ingest.py        Document extraction and index generation
 db/init/                Database initialization SQL
-data/corpus_raw/        Source documents and URL list
+data/corpus_raw/        User-supplied documents and URL list (ignored by Git)
 data/glossary/          Forestry glossary
 data/NDVI_rasters/      User-supplied rasters (ignored by Git)
 data/corpus_clean/      Generated text and metadata (ignored by Git)
