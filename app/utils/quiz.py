@@ -190,7 +190,8 @@ class QuizEngine:
         topic_settings = self._topic_settings(topic)
         retrieval_query = topic_settings["retrieval_query"]
 
-        nodes = get_hybrid_retriever().retrieve(retrieval_query)
+        # Topic queries already contain detailed search terms; skip LLM expansion.
+        nodes = get_hybrid_retriever(expand_queries=False).retrieve(retrieval_query)
 
         node_list = list(nodes)
         if not node_list:

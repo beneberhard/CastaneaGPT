@@ -57,8 +57,8 @@ def get_index():
     return load_index_from_storage(storage_context)
 
 
-@lru_cache(maxsize=1)
-def get_hybrid_retriever():
+@lru_cache(maxsize=2)
+def get_hybrid_retriever(*, expand_queries: bool = True):
     get_llm()
     index = get_index()
     vector_retriever = VectorIndexRetriever(
@@ -73,7 +73,7 @@ def get_hybrid_retriever():
     return QueryFusionRetriever(
         retrievers=[vector_retriever, bm25_retriever],
         similarity_top_k=20,
-        num_queries=3,
+        num_queries=3 if expand_queries else 1,
         mode="reciprocal_rerank",
     )
 
@@ -114,7 +114,7 @@ def build_text_qa_prompt(
 
 
 def retrieve_source_nodes(question: str) -> list[Any]:
-    return list(get_hybrid_retriever().retrieve(question))
+    return list(get_hybrid_retriever(expand_queries=False).retrieve(question))
 
 
 def source_key_from_metadata(meta: dict[str, Any]) -> str:

@@ -4,6 +4,7 @@ storage/
 data/NDVI_rasters/
 data/corpus_clean/
 data/tmp/
+README_priv.md
 
 # Local/generated files
 .DS_Store
