@@ -16,3 +16,6 @@ tmp_map_script.js
 
 # Microsoft Word temporary files
 ~$*.docx
+
+# Local RAG source documents
+data/corpus_raw/
