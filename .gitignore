@@ -12,3 +12,4 @@ README_priv.md
 __pycache__/
 **/__pycache__/
 *.py[cod]
+tmp_map_script.js
