@@ -13,3 +13,6 @@ __pycache__/
 **/__pycache__/
 *.py[cod]
 tmp_map_script.js
+
+# Microsoft Word temporary files
+~$*.docx
