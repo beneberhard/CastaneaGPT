@@ -10,10 +10,43 @@ from datetime import datetime
 from urllib.parse import urlparse
 
 from app.llm_config import embedding_api_key, embedding_model
+from app.utils.source_catalogue import (
+    catalogue_metadata, validate_source_files, load_catalogue, WEB_SOURCES_PATH,
+)
+
+ACTIVE_CLEAN_FILES = set()
+
+
+def curated_metadata(meta):
+    source_path = meta.get("source_path")
+    if source_path:
+        path = Path(source_path)
+        relative = path.resolve().relative_to(RAW.resolve()).as_posix()
+        entries = {entry['file']: entry for entry in load_catalogue()}
+        if relative not in entries:
+            raise ValueError(f'No authoritative metadata for {relative}')
+        meta = {**meta, **catalogue_metadata(entries[relative])}
+    return meta
+
+
+def reuse_clean_text(out, source=None, url=None):
+    """Refresh metadata even when extraction is cached; exclude stale files."""
+    sidecar = out.with_suffix(out.suffix + '.meta.json')
+    if not out.exists() or not sidecar.exists() or not out.read_text(encoding='utf-8').strip():
+        return False
+    meta = json.loads(sidecar.read_text(encoding='utf-8'))
+    if url is not None and meta.get('url') != url:
+        return False
+    if source is not None:
+        meta.update(source_path=str(source.resolve()), file_name=source.name)
+    write_meta(out, meta)
+    return True
 
 def write_meta(out_txt: Path, meta: dict) -> None:
     meta_path = out_txt.with_suffix(out_txt.suffix + ".meta.json")  # .txt.meta.json
+    meta = curated_metadata(meta)
     meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+    ACTIVE_CLEAN_FILES.add(out_txt)
 
 
 RAW = Path("data/corpus_raw")
@@ -55,26 +88,56 @@ def ingest_pdfs():
         out = CLEAN / f"{pdf.stem}.txt"
 
         meta_out = out.with_suffix(out.suffix + ".meta.json")
-        if out.exists() and meta_out.exists():
+        if reuse_clean_text(out, source=pdf):
             continue
 
         print(f"Ingesting PDF: {pdf.name}")
         pages = []
         pdf_title = ""
         pdf_author = ""
+        ocr_pages = 0
+        raster_document = None
         with pdfplumber.open(pdf) as p:
             metadata = p.metadata or {}
             pdf_title = metadata.get("Title") or metadata.get("title") or ""
             pdf_author = metadata.get("Author") or metadata.get("author") or ""
-            for page in p.pages:
-                txt = page.extract_text()
-                if txt:
+            for page_number, page in enumerate(p.pages):
+                txt = page.extract_text() or ""
+                if len(txt.strip()) < 40 and page.images:
+                    import io
+                    import shutil
+                    import subprocess
+                    import pypdfium2
+                    if not shutil.which('tesseract'):
+                        raise RuntimeError(f'OCR required for {pdf.name}, but Tesseract is unavailable')
+                    if raster_document is None:
+                        raster_document = pypdfium2.PdfDocument(str(pdf))
+                    raster_page = raster_document[page_number]
+                    bitmap = raster_page.render(scale=3)
+                    image = bitmap.to_pil()
+                    buffer = io.BytesIO()
+                    image.save(buffer, format='PNG')
+                    result = subprocess.run(
+                        ['tesseract', 'stdin', 'stdout', '-l', 'eng+ita+deu'],
+                        input=buffer.getvalue(), capture_output=True, check=True, timeout=180,
+                    )
+                    txt = result.stdout.decode('utf-8').strip()
+                    image.close(); bitmap.close(); raster_page.close()
+                    ocr_pages += 1
+                    print(f'  OCR page {page_number + 1}/{len(p.pages)}', flush=True)
+                if txt.strip():
                     pages.append(txt)
+        if raster_document is not None:
+            raster_document.close()
+        if not pages:
+            raise ValueError(f'No readable content in {pdf.name}; index was not rebuilt')
 
         citation_label = choose_citation_label(pdf_title, humanize_filename(pdf.name))
         out.write_text(clean_text("\n".join(pages)), encoding="utf-8")
         write_meta(out, {
             "source_type": "pdf",
+            "extraction_method": "pdfplumber+ocr" if ocr_pages else "pdfplumber",
+            "ocr_pages": ocr_pages,
             "file_name": pdf.name,
             "title": clean_text(pdf_title),
             "author": clean_text(pdf_author),
@@ -96,7 +159,7 @@ def ingest_text_files():
             out = CLEAN / txt.name
 
             meta_out = out.with_suffix(out.suffix + ".meta.json")
-            if out.exists() and meta_out.exists():
+            if reuse_clean_text(out, source=txt):
                 continue
 
             print(f"Ingesting TXT: {txt.name}")
@@ -126,11 +189,13 @@ def ingest_word_files():
     docx_files = sorted(RAW.rglob("*.docx"))
 
     for docx in docx_files:
+        if docx.name.startswith('~$'):
+            continue
         safe_name = re.sub(r"\W+", "_", str(docx.relative_to(RAW)).strip()).strip("_")
         out = CLEAN / f"docx_{safe_name}.txt"
 
         meta_out = out.with_suffix(out.suffix + ".meta.json")
-        if out.exists() and meta_out.exists():
+        if reuse_clean_text(out, source=docx):
             continue
 
         print(f"Ingesting DOCX: {docx.name}")
@@ -163,7 +228,7 @@ def ingest_word_files():
             })
 
 
-def ingest_urls():
+def ingest_urls(cache_only=False):
     from bs4 import BeautifulSoup
     from readability import Document
 
@@ -182,9 +247,17 @@ def ingest_urls():
         slug = re.sub(r"\W+", "_", url)[:60]
         out = CLEAN / f"url_{slug}.txt"
         meta_out = out.with_suffix(out.suffix + ".meta.json")
-        if out.exists() and meta_out.exists():
+        if reuse_clean_text(out, url=url):
             continue
 
+        if out.exists():
+            import hashlib
+            out = CLEAN / f"url_{slug}_{hashlib.sha256(url.encode()).hexdigest()[:12]}.txt"
+            if reuse_clean_text(out, url=url):
+                continue
+        if cache_only:
+            print(f"  No cached extraction for URL; excluded: {url}")
+            continue
         print(f"Ingesting URL: {url}")
 
         try:
@@ -268,8 +341,8 @@ def build_and_persist_index():
     # -----------------------------
     # Chunking hyperparameters
     # -----------------------------
-    CHUNK_SIZE = 1200        # characters for SentenceSplitter
-    CHUNK_OVERLAP = 180      # characters overlap
+    CHUNK_SIZE = 600        # tokens for SentenceSplitter
+    CHUNK_OVERLAP = 90      # tokens overlap
 
     # Apply splitter globally for this ingest run
     Settings.node_parser = SentenceSplitter(
@@ -284,10 +357,9 @@ def build_and_persist_index():
     print("Building index from:", CLEAN.resolve())
     print(f"Chunking: chunk_size={CHUNK_SIZE}, chunk_overlap={CHUNK_OVERLAP}")
 
-    txt_files = sorted(CLEAN.glob("*.txt"))
+    txt_files = sorted(ACTIVE_CLEAN_FILES)
     if not txt_files:
-        print("⚠️ No documents found in corpus_clean. Nothing to index.")
-        return
+        raise ValueError("No active source documents available; existing index was not changed")
 
     docs = []
     for txt in txt_files:
@@ -301,7 +373,16 @@ def build_and_persist_index():
             except Exception as e:
                 print(f"  ⚠️ Could not read metadata for {txt.name}: {e}")
 
-        docs.append(Document(text=text, metadata=meta))
+        # Bibliographic fields must reach chunks without bloating embedding input.
+        docs.append(Document(
+            text=text, metadata=meta,
+            excluded_embed_metadata_keys=list(meta), excluded_llm_metadata_keys=list(meta),
+        ))
+
+    expected_ids = {source['source_id'] for source in load_catalogue()}
+    actual_ids = {document.metadata.get('source_id') for document in docs if document.metadata.get('source_id')}
+    if actual_ids != expected_ids:
+        raise ValueError(f'Not all curated sources extracted: missing={sorted(expected_ids-actual_ids)}')
 
     # -----------------------------
     # Versioned persist dir bump
@@ -317,58 +398,71 @@ def build_and_persist_index():
         # Fallback: use PERSIST_DIR as-is
         persist_dir = PERSIST_DIR
 
-    persist_dir.mkdir(parents=True, exist_ok=True)
+    import hashlib
+    import shutil
+    import tempfile
+    from app.utils.source_catalogue import CATALOGUE_PATH
+    # Build beside the live index; publish only after the entire rebuild succeeds.
+    persist_dir.parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix=persist_dir.name + '.building-', dir=persist_dir.parent))
+    backup = persist_dir.with_name(persist_dir.name + '.backup-' + datetime.now().strftime('%Y%m%d-%H%M%S-%f'))
+    try:
+        nodes = Settings.node_parser.get_nodes_from_documents(docs, show_progress=True)
+        nodes = [node for node in nodes if node.get_text().strip()]
+        indexed_ids = {node.metadata.get('source_id') for node in nodes if node.metadata.get('source_id')}
+        if indexed_ids != expected_ids:
+            raise ValueError(f'Curated sources have no readable chunks: {sorted(expected_ids-indexed_ids)}')
+        index = VectorStoreIndex(nodes=nodes, show_progress=True)
+        index.storage_context.persist(persist_dir=str(staging))
+        web_sources = [document.metadata for document in docs if document.metadata.get('source_type') == 'url']
+        manifest = {
+            'catalogue_sha256': hashlib.sha256(CATALOGUE_PATH.read_bytes()).hexdigest(),
+            'curated_source_ids': sorted(actual_ids), 'document_count': len(docs),
+            'node_count': len(index.docstore.docs),
+            'active_clean_files': [path.name for path in txt_files],
+            'rebuilt_at': datetime.now().isoformat(timespec='seconds'),
+            'web_sources': web_sources,
+        }
+        (staging / 'catalogue_manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
+        if persist_dir.exists():
+            persist_dir.rename(backup)
+        try:
+            staging.rename(persist_dir)
+        except Exception:
+            if backup.exists():
+                backup.rename(persist_dir)
+            raise
+        WEB_SOURCES_PATH.write_text(json.dumps(web_sources, ensure_ascii=False, indent=2), encoding='utf-8')
+    except Exception:
+        if staging.exists():
+            shutil.rmtree(staging)
+        raise
+    print(f'Index published: {persist_dir.resolve()} ({len(docs)} documents, {manifest["node_count"]} chunks)')
+    print(f'Previous index retained at: {backup}')
 
-    # Build index (will use Settings.node_parser)
-    index = VectorStoreIndex.from_documents(docs)
-    index.storage_context.persist(persist_dir=str(persist_dir))
-    print("✔ Index persisted to:", persist_dir.resolve())
 
 
 
-def main():
+def main(prepare_only=False, reuse_web_only=False):
+    validate_source_files(RAW)
+    ACTIVE_CLEAN_FILES.clear()
     ingest_pdfs()
     ingest_text_files()
     ingest_word_files()
-    ingest_urls()
+    ingest_urls(cache_only=reuse_web_only)
+    print(f"Prepared {len(ACTIVE_CLEAN_FILES)} active cleaned documents")
+    if prepare_only:
+        return
     build_and_persist_index()
     print("Ingestion + indexing complete.")
 
 
 if __name__ == "__main__":
-    main()
-
-
-
-"""def build_and_persist_index():
-    import json
-    from llama_index.core import Document, VectorStoreIndex
-
-    print("Building index from:", CLEAN.resolve())
-
-    txt_files = sorted(CLEAN.glob("*.txt"))
-    if not txt_files:
-        print("⚠️ No documents found in corpus_clean. Nothing to index.")
-        return
-
-    docs = []
-    for txt in txt_files:
-        text = txt.read_text(encoding="utf-8", errors="ignore")
-
-        meta = {"clean_file": txt.name}
-        meta_path = Path(str(txt) + ".meta.json")  # e.g. mydoc.txt.meta.json
-        if meta_path.exists():
-            try:
-                meta.update(json.loads(meta_path.read_text(encoding="utf-8")))
-            except Exception as e:
-                print(f"  ⚠️ Could not read metadata for {txt.name}: {e}")
-
-        docs.append(Document(text=text, metadata=meta))
-
-    index = VectorStoreIndex.from_documents(docs)
-    index.storage_context.persist(persist_dir=str(PERSIST_DIR))
-    print("✔ Index persisted to:", PERSIST_DIR.resolve())
-    """
-
+    import argparse
+    parser = argparse.ArgumentParser(description="Extract active sources, apply curated metadata, rebuild the index")
+    parser.add_argument('--prepare-only', action='store_true', help='Refresh extraction/metadata without embedding or rebuilding')
+    parser.add_argument('--reuse-web-only', action='store_true', help='Keep cached active URL sources without fetching websites')
+    args = parser.parse_args()
+    main(prepare_only=args.prepare_only, reuse_web_only=args.reuse_web_only)
 
 

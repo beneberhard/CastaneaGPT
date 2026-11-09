@@ -59,11 +59,14 @@ def build_response_policy(mode: str, verbosity: str, language: str, cite_style: 
         )
 
     # Citation formatting
-    if cite_style == "end":
+    if cite_style == "none":
+        cite_rules = "- Do not include citation markers or a reference list.\n"
+    elif cite_style == "end":
         cite_rules = (
             "- Use source-numbered citations: exact identifiers from context, e.g. [Source 1].\n"
             "- Include a short 'Evidence used' line at the end with 3–6 cited identifiers.\n"
-            "- Do not invent author-year or bibliographic citations.\n"
+            "- Use only source IDs provided above; never invent IDs or bibliography.\n"
+            "- Do not write a reference list; the application adds it.\n"
         )
     else:
         cite_rules = (
@@ -72,7 +75,8 @@ def build_response_policy(mode: str, verbosity: str, language: str, cite_style: 
             "- Cite each substantive recommendation, definition, or factual claim with one or more source identifiers.\n"
             "- Every factual bullet or paragraph must contain at least one citation unless it explicitly says the sources are insufficient.\n"
             "- Example: Chestnut fruit production depends on site quality and management intensity [Source 2].\n"
-            "- Do not invent author-year or bibliographic citations.\n"
+            "- Use only source IDs provided above; never invent IDs or bibliography.\n"
+            "- Do not write a reference list; the application adds it.\n"
         )
 
     return f"""

@@ -4,19 +4,30 @@ This is the stable API for CastaneaGPT.
 It uses FastAPI to provide endpoints for querying the RAG system.
 """
 
+from pathlib import Path
+from contextlib import asynccontextmanager
 import uuid
+import json
+import logging
+from time import perf_counter
+from app.utils.timing import ChatTiming, timed_stage
+from app.utils.source_catalogue import (
+    CitationStreamFormatter, format_answer_citations, public_sources,
+    WEB_SOURCES_PATH, safe_url,
+)
 import re
 from typing import Optional, List, Dict
 
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from starlette.concurrency import run_in_threadpool
+from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
 from app.api.schemas import ChatRequest
 from app.api.memory import InMemorySessionStore, format_memory
 from app.api.geo import router as geo_router
-from app.rag.rag import query_rag
+from app.rag.rag import get_hybrid_retriever, query_rag, stream_query_rag
 from app.utils.stand_context import (
     build_ndvi_context_block,
     build_stand_context_block,
@@ -26,6 +37,8 @@ from app.utils.quiz import quiz
 
 from app.api.ndvi import router as ndvi_router
 
+from app.api.identification import router as identification_router
+
 load_dotenv()
 
 
@@ -33,11 +46,27 @@ load_dotenv()
 # -----------------------------
 # App + Memory
 # -----------------------------
-app = FastAPI(title="CastaneaGPT API", version="0.2")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Warm the same cached retriever used by chat before accepting requests."""
+    logger = logging.getLogger("uvicorn.error")
+    started = perf_counter()
+    logger.info("Initializing chat index and retriever...")
+    try:
+        await run_in_threadpool(get_hybrid_retriever, expand_queries=False)
+    except Exception:
+        logger.exception("Chat initialization failed; API startup aborted")
+        raise
+    logger.info("Chat index and retriever ready in %.2f seconds", perf_counter() - started)
+    yield
+
+
+app = FastAPI(title="CastaneaGPT API", version="0.2", lifespan=lifespan)
 
 session_store = InMemorySessionStore(max_turns=8, ttl_minutes=120)
 app.include_router(ndvi_router, prefix="/geo")
 app.include_router(geo_router)
+app.include_router(identification_router)
 
 
 # -----------------------------
@@ -54,35 +83,6 @@ def is_uuid(val: str) -> bool:
 def _enum_to_str(x) -> str:
     """Supports Enum values from Pydantic (e.g., AnswerMode.professional)."""
     return x.value if hasattr(x, "value") else str(x)
-
-
-def _has_source_citation(text: str) -> bool:
-    return bool(re.search(r"\[Source\s+\d+\]", text or ""))
-
-
-def _add_fallback_inline_citations(answer: str, source_ids: list[int]) -> str:
-    """Add conservative line-level citations only when the LLM omitted them entirely."""
-    if not answer or _has_source_citation(answer) or not source_ids:
-        return answer
-
-    fallback = " ".join(f"[Source {source_id}]" for source_id in source_ids[:2])
-    cited_lines = []
-
-    for line in answer.splitlines():
-        stripped = line.strip()
-        if not stripped:
-            cited_lines.append(line)
-            continue
-
-        is_heading = stripped.endswith(":") or stripped.lower().startswith(("confidence:", "assumptions:"))
-        is_insufficient = "insufficient" in stripped.lower() or "not enough" in stripped.lower()
-        if is_heading or is_insufficient:
-            cited_lines.append(line)
-            continue
-
-        cited_lines.append(f"{line} {fallback}")
-
-    return "\n".join(cited_lines)
 
 
 # -----------------------------
@@ -136,8 +136,10 @@ def health():
 
 
 @app.post("/chat")
-def chat(req: ChatRequest):
+def chat(req: ChatRequest, stream: bool = False):
 
+    timing = ChatTiming()
+    context_started = perf_counter()
     print("DEBUG stand_id:", req.stand_id)
 
     # Convert Enums -> strings
@@ -219,8 +221,7 @@ def chat(req: ChatRequest):
     # -----------------------------
     # Step 1: RAG retrieval
     # -----------------------------
-    rag_out = query_rag(
-        retrieval_question,
+    rag_options = dict(
         mode=mode,
         verbosity=verbosity,
         language=language,
@@ -228,77 +229,103 @@ def chat(req: ChatRequest):
         language_hint_text=req.query,
         recent_source_keys=recent_source_keys,
     )
+    timing.seconds["request_preparation"] = perf_counter() - context_started
+    if stream:
+        def events():
+            # StreamingResponse can resume each next() in a different context.
+            iterator = timed_events()
+            try:
+                while True:
+                    with timing.activate():
+                        try:
+                            chunk = next(iterator)
+                        except StopIteration:
+                            return
+                    yield chunk
+            finally:
+                with timing.activate():
+                    iterator.close()
 
-    final_answer = rag_out.get("answer", "")
-    sources = rag_out.get("sources", []) or []
+        def timed_events():
+            # Newline-delimited JSON keeps text, completion metadata and errors distinct.
+            yield json.dumps({"type": "start", "session_id": session_id}) + "\n"
+            chunks = []
+            sources = []
+            formatter = CitationStreamFormatter([], enabled=cite_style != "none")
+            try:
+                for event in stream_query_rag(retrieval_question, **rag_options):
+                    if event["type"] == "delta":
+                        chunks.append(event["text"])
+                        text = formatter.feed(event["text"])
+                        if text:
+                            yield json.dumps({"type": "delta", "text": text}) + "\n"
+                    elif event["type"] == "sources":
+                        sources = event["sources"]
+                        formatter.sources = sources
+                remaining = formatter.feed("", final=True)
+                if remaining:
+                    yield json.dumps({"type": "delta", "text": remaining}) + "\n"
+                with timed_stage("finalization"):
+                    result = _finalize_chat(
+                        req, session_id, cite_style, "".join(chunks), sources
+                    )
+                timing.log("complete")
+                yield json.dumps({"type": "done", **result}) + "\n"
+            except Exception:
+                timing.log("error")
+                logging.getLogger(__name__).exception("Chat stream failed")
+                yield json.dumps({
+                    "type": "error", "message": "Answer interrupted. Please try again."
+                }) + "\n"
 
-    # -----------------------------
-    # Normalize sources
-    # -----------------------------
-    normalized_sources = []
+        return StreamingResponse(
+            events(), media_type="application/x-ndjson",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
-    for s in sources[:8]:
-        label = s.get("label") or s.get("source") or "document"
-        snippet = (s.get("snippet") or "").strip()
-        page = s.get("page")
-        score = s.get("score")
+    with timing.activate():
+        try:
+            rag_out = query_rag(retrieval_question, **rag_options)
+            with timed_stage("finalization"):
+                result = _finalize_chat(
+                    req, session_id, cite_style,
+                    rag_out.get("answer", ""), rag_out.get("sources", []) or [],
+                )
+            timing.log("complete")
+            return result
+        except Exception:
+            timing.log("error")
+            raise
 
-        normalized_sources.append({
-            "id": s.get("id"),
-            "label": label,
-            "page": page,
-            "score": score,
-            "snippet": snippet,
-        })
 
-    # -----------------------------
-    # Citation formatting
-    # -----------------------------
-    if cite_style != "none" and normalized_sources:
-        source_ids = [s["id"] for s in normalized_sources if isinstance(s.get("id"), int)]
-        final_answer = _add_fallback_inline_citations(final_answer, source_ids)
-
-        citation_text = "\n\nSource reference list:\n"
-
-        for s in normalized_sources[:8]:
-            source_id = s.get("id") or "?"
-            citation_text += f"[Source {source_id}] {s['label']}"
-            if s["page"]:
-                citation_text += f", p.{s['page']}"
-            citation_text += "\n"
-
-        final_answer = final_answer + citation_text
-
-    # -----------------------------
-    # Update memory
-    # -----------------------------
+def _finalize_chat(req, session_id, cite_style, final_answer, sources):
+    """Resolve cited source IDs, list used publications once, and save memory."""
+    final_answer, cited_sources = format_answer_citations(
+        final_answer, sources, enabled=cite_style != "none",
+    )
     if req.use_session_memory and session_id:
         session_store.append(session_id, "user", req.query)
         session_store.append(session_id, "assistant", final_answer)
         session_store.set_recent_sources(
-            session_id,
-            [s.get("source_key") or s.get("label") or "" for s in sources[:8]],
+            session_id, [s.get("source_key") or s.get("label") or "" for s in cited_sources],
         )
-
-    # -----------------------------
-    # Compact sources for frontend
-    # -----------------------------
+    public_keys = ("id", "source_id", "source_key", "label", "page", "score", "snippet",
+                   "first_author", "title", "year", "year_suffix", "inline_citation", "reference_entry")
     compact_sources = [
-        {
-            "id": s["id"],
-            "label": s["label"],
-            "page": s["page"],
-            "score": s["score"],
-            "snippet": s["snippet"],
-        }
-        for s in normalized_sources[:8]
+        {**{key: source.get(key) for key in public_keys}, "url": safe_url(source.get("url"))}
+        for source in cited_sources
     ]
+    return {"answer": final_answer, "sources": compact_sources, "session_id": session_id}
 
-    return {
-        "answer": final_answer,
-        "sources": compact_sources,
-        "session_id": session_id,
-    }
+
+@app.get("/sources", tags=["bibliography"])
+def source_library():
+    """Curated literature alphabetized by first author, plus indexed web sources."""
+    web_sources = json.loads(WEB_SOURCES_PATH.read_text(encoding="utf-8")) if WEB_SOURCES_PATH.exists() else []
+    web = [{"title": s.get("title") or s.get("citation_label") or s.get("domain"),
+            "domain": s.get("domain"), "url": safe_url(s.get("url"))} for s in web_sources]
+    web.sort(key=lambda s: ((s['domain'] or '').casefold(), (s['title'] or '').casefold()))
+    return {"sources": public_sources(), "web_sources": web}
 
 
 @app.post("/memory/reset")
@@ -481,8 +508,10 @@ def map_view():
     <div class="button-row">
       <button id="askBtn">Chiedi / Ask</button>
       <button id="toggleAnswerBtn">Nascondi / Hide</button>
+      <button id="openSourceLibrary" type="button">Fonti / Source library</button>
     </div>
     <div id="answerBox" class="answer"></div>
+    <button id="openAssessment" type="button">Valuta danni / Assess tree damage</button>
   </div>
 
   <div class="section">
@@ -638,6 +667,7 @@ let selectedStandNdvi = null;
 let selectedStandCollapsed = false;
 let lastStandFeatureCollection = null;
 let answerCollapsed = false;
+let chatSessionId = null;
 
 const STAND_LABELS = {
   1: "1: Palummaro / Italy",
@@ -977,6 +1007,24 @@ async function loadStands(options = {}) {
 }
 
 
+function renderCompletedAnswer(container, text) {
+  container.replaceChildren();
+  const pattern = /https?:[^\\s<>]+/g;
+  let start = 0;
+  for (const match of text.matchAll(pattern)) {
+    container.append(document.createTextNode(text.slice(start, match.index)));
+    const link = document.createElement("a");
+    link.href = match[0];
+    link.textContent = match[0];
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    container.append(link);
+    start = match.index + match[0].length;
+  }
+  container.append(document.createTextNode(text.slice(start)));
+}
+
+
 document.getElementById("askBtn").addEventListener("click", async () => {
   const question = document.getElementById("chatInput").value.trim();
   const askBtn = document.getElementById("askBtn");
@@ -1000,13 +1048,14 @@ document.getElementById("askBtn").addEventListener("click", async () => {
   const language = document.getElementById("languageSelect").value;
 
   try {
-    const res = await fetch("/chat", {
+    const res = await fetch("/chat?stream=true", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         query: question,
         stand_id: selectedStandId,
         use_session_memory: true,
+        session_id: chatSessionId,
         mode: mode,
         verbosity: verbosity,
         language: language,
@@ -1018,11 +1067,52 @@ document.getElementById("askBtn").addEventListener("click", async () => {
       throw new Error("Chat request failed");
     }
 
-    const data = await res.json();
-    answerBox.innerHTML = data.answer;
+    if (!res.body) throw new Error("Streaming is unavailable");
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let completed = false;
+    let answer = "";
+    answerBox.style.whiteSpace = "pre-wrap";
+    function handleEvent(line) {
+      if (!line.trim()) return;
+      const event = JSON.parse(line);
+      if (event.type === "delta") {
+        if (!event.text) return;
+        answer += event.text;
+        answerBox.textContent = answer;
+      } else if (event.type === "done") {
+        // The final answer includes verified catalogue labels and cited references.
+        renderCompletedAnswer(answerBox, event.answer);
+        chatSessionId = event.session_id;
+        completed = true;
+      } else if (event.type === "error") {
+        throw new Error(event.message);
+      }
+    }
+    try {
+      while (true) {
+        const {value, done} = await reader.read();
+        buffer += decoder.decode(value, {stream: !done});
+        let newline;
+        while ((newline = buffer.indexOf("\\n")) !== -1) {
+          handleEvent(buffer.slice(0, newline));
+          buffer = buffer.slice(newline + 1);
+        }
+        if (done) break;
+      }
+      if (buffer.trim()) handleEvent(buffer);
+      if (!completed) throw new Error("Answer interrupted");
+    } finally {
+      await reader.cancel();
+      reader.releaseLock();
+    }
   } catch (err) {
     console.error("Chat request failed:", err);
-    answerBox.innerHTML = "<i>Request failed. Please try again.</i>";
+    const partial = answerBox.textContent === "Thinking…" ? "" : answerBox.textContent;
+    answerBox.textContent = partial
+      ? partial + "\\n\\nAnswer interrupted. Please try again."
+      : "Request failed. Please try again.";
   } finally {
     askBtn.disabled = false;
     chatInput.disabled = false;
@@ -1255,6 +1345,9 @@ function restartQuiz() {
 </body>
 </html>
 """
+    overlay = (Path(__file__).parents[1] / "ui" / "image_assessment.html").read_text(encoding="utf-8")
+    library = (Path(__file__).parents[1] / "ui" / "source_library.html").read_text(encoding="utf-8")
+    html = html.replace("</body>", overlay + "\n" + library + "\n</body>")
     return HTMLResponse(content=html)
 
 

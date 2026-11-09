@@ -1,0 +1,91 @@
+<style>
+  #sourceLibrary { border: 0; border-radius: 14px; width: min(850px, 90vw); max-height: 82vh; padding: 24px; font: 14px/1.5 system-ui, sans-serif; color: #202b24; }
+  #sourceLibrary::backdrop { background: rgb(0 0 0 / 45%); }
+  #sourceLibrary header { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+  #sourceLibrary h2 { margin: 0; font-size: 22px; }
+  #sourceLibrary button { padding: 7px 12px; cursor: pointer; }
+  #sourceLibrarySearch { box-sizing: border-box; width: 100%; padding: 10px; margin: 18px 0 8px; }
+  #sourceLibraryList { padding-left: 24px; }
+  #sourceLibraryList li, #sourceLibraryWebList li { margin: 16px 0; }
+  #sourceLibraryList p { margin: 4px 0; }
+  #sourceLibraryList small { color: #526057; }
+  #sourceLibrary a { color: #246743; overflow-wrap: anywhere; }
+</style>
+<dialog id="sourceLibrary" aria-labelledby="sourceLibraryTitle">
+  <header>
+    <h2 id="sourceLibraryTitle">Bibliografia / Source library</h2>
+    <button id="closeSourceLibrary" type="button" aria-label="Close source library">Chiudi / Close</button>
+  </header>
+  <p>Letteratura ordinata per primo autore / Literature sorted by first author. The original source IDs remain unchanged. “n.d.” means no publication year was supplied.</p>
+  <input id="sourceLibrarySearch" type="search" placeholder="Cerca autore, titolo, anno / Search author, title, year" aria-label="Search sources">
+  <p id="sourceLibraryStatus" role="status" aria-live="polite"></p>
+  <ol id="sourceLibraryList"></ol>
+  <details id="sourceLibraryWeb"><summary>Altre fonti web indicizzate / Other indexed web sources</summary><ul id="sourceLibraryWebList"></ul></details>
+</dialog>
+<script>
+(() => {
+  const dialog = document.getElementById('sourceLibrary');
+  const list = document.getElementById('sourceLibraryList');
+  const status = document.getElementById('sourceLibraryStatus');
+  const search = document.getElementById('sourceLibrarySearch');
+  let catalogue = null;
+  function addLink(parent, url, label) {
+    if (!url || !/^https?:\/\//i.test(url)) return;
+    const link = document.createElement('a');
+    link.href = url;
+    link.textContent = label;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    parent.append(link);
+  }
+  function render() {
+    if (!catalogue) return;
+    list.replaceChildren();
+    const term = search.value.trim().toLocaleLowerCase();
+    const sources = catalogue.sources.filter(s =>
+      `${s.source_id} ${s.full_reference} ${s.reference_entry}`.toLocaleLowerCase().includes(term));
+    status.textContent = `${sources.length} / ${catalogue.sources.length} sources`;
+    for (const source of sources) {
+      const item = document.createElement('li');
+      const heading = document.createElement('strong');
+      heading.textContent = source.reference_entry;
+      const id = document.createElement('small');
+      id.textContent = `Source ID ${source.source_id} · ${source.inline_citation}`;
+      const reference = document.createElement('p');
+      reference.textContent = source.full_reference;
+      item.append(heading, document.createElement('br'), id, reference);
+      addLink(item, source.url, 'Pubblicazione / Publication');
+      list.append(item);
+    }
+    const webList = document.getElementById('sourceLibraryWebList');
+    webList.replaceChildren();
+    const websites = catalogue.web_sources.filter(s => `${s.title} ${s.domain}`.toLocaleLowerCase().includes(term));
+    document.getElementById('sourceLibraryWeb').hidden = catalogue.web_sources.length === 0;
+    for (const source of websites) {
+      const item = document.createElement('li');
+      addLink(item, source.url, `${source.domain} — ${source.title}`);
+      webList.append(item);
+    }
+  }
+  document.getElementById('openSourceLibrary').addEventListener('click', async () => {
+    dialog.showModal();
+    search.focus();
+    if (catalogue) { render(); return; }
+    status.textContent = 'Caricamento / Loading…';
+    try {
+      const response = await fetch('/sources');
+      if (!response.ok) throw new Error('Source library request failed');
+      catalogue = await response.json();
+      render();
+    } catch (error) {
+      status.textContent = 'Impossibile caricare le fonti. Riprova. / Could not load sources. Please retry.';
+    }
+  });
+  search.addEventListener('input', render);
+  document.getElementById('closeSourceLibrary').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('click', event => { if (event.target === dialog) {
+    const rect = dialog.getBoundingClientRect();
+    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close();
+  }});
+})();
+</script>

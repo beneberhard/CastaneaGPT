@@ -51,7 +51,7 @@ Ensure `data/corpus_raw/` contains readable source documents before starting. Th
 | Word documents | `*.docx` anywhere under `data/corpus_raw/` |
 | Web pages | One URL per line in `data/corpus_raw/urls.txt` |
 
-PDF ingestion does not perform OCR. Extracted text and citation metadata are written to `data/corpus_clean/`; embeddings and the retrieval index are stored separately. Model calls, including embedding the collection, can incur API charges.
+PDF ingestion uses local Tesseract OCR for image-only pages in the Docker image. The numbered literature uses the curated metadata in `data/source_catalogue.json`; extracted text and citation metadata are written to `data/corpus_clean/`. Embeddings and the retrieval index are stored separately. See [source catalogue and citations](docs/source-catalogue.md) for mappings, citation formatting, the chat source library, and rebuilding. Model calls, including embedding the collection, can incur API charges.
 
 ### 3. Build and start
 
@@ -108,9 +108,16 @@ docker compose run --rm --build reingest
 docker compose restart api
 ```
 
+When adding new items, the following command skips ingested documents (provided the embedding configuration hasn't changed.)
+
+```bash
+docker compose exec app python -m scripts.ingest_rag_corpus
+```
+
+
 The `reingest` service reads the current project files through a bind mount and writes to the same index volume used by the API. Restarting the API clears its cached index and retriever.
 
-**Changed or removed documents need an extra step:** ingestion skips extraction when a cleaned text file and its metadata sidecar already exist. Remove the affected generated `.txt` and `.txt.meta.json` files from `data/corpus_clean/` before reingesting. Remove cleaned files for deleted sources too, so they are not included in the rebuilt index. To re-extract the whole collection, clear the generated contents of that directory first.
+**Changed document content needs re-extraction:** nonempty cleaned text is reused, but curated bibliography metadata is refreshed on every ingestion. Remove the affected generated `.txt` and `.txt.meta.json` files from `data/corpus_clean/` before reingesting changed content. Empty cached text is retried automatically, including local OCR when needed. Removed sources and stale cleaned files are excluded from the rebuilt index automatically. To re-extract the whole collection, clear the generated contents of that directory first.
 
 The normal worker checks whether the index directory exists, rather than whether its contents are complete. If ingestion failed or ran with no documents, correct the underlying problem and run `reingest` explicitly. Keep `OPENAI_EMBEDDING_MODEL` consistent between ingestion and querying; rebuild the index when changing it.
 

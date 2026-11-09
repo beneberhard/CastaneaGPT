@@ -63,6 +63,7 @@ services:
 
   db:
     image: postgis/postgis:16-3.4
+    platform: linux/amd64
     container_name: castaneagpt_db
     environment:
       POSTGRES_DB: castanea

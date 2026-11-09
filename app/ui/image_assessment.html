@@ -1,0 +1,188 @@
+<style>
+#imageAssessment { border:0; border-radius:16px; width:min(760px, calc(100vw - 40px)); max-height:88vh; padding:0; font:15px/1.5 system-ui,sans-serif; color:#183629; box-shadow:0 18px 70px #0005; }
+#imageAssessment::backdrop { background:#14241bcc; }
+#imageAssessment * { box-sizing:border-box; }
+#imageAssessment .ia-header { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:18px 24px; border-bottom:1px solid #d5dfd6; }
+#imageAssessment h2, #imageAssessment h3 { margin:0; }
+#imageAssessment .ia-body { padding:20px 24px; }
+#imageAssessment .ia-note { background:#edf4eb; padding:12px; border-radius:8px; }
+#imageAssessment .ia-hint { color:#4c6152; font-size:13px; }
+#imageAssessment .ia-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+#imageAssessment input, #imageAssessment select, #imageAssessment textarea { width:100%; padding:9px; border:1px solid #8a9f8f; border-radius:6px; background:white; color:#183629; font:inherit; }
+#imageAssessment textarea { margin:0; }
+#imageAssessment button { padding:9px 14px; border-radius:6px; border:1px solid #819687; background:white; color:#183629; font:inherit; }
+#imageAssessment button[type=submit] { background:#28593a; color:white; }
+#imageAssessment button:disabled { opacity:.6; cursor:wait; }
+#imageAssessment :focus-visible { outline:3px solid #aa7021; outline-offset:3px; }
+#iaPreview { display:flex; flex-wrap:wrap; gap:12px; margin-top:12px; }
+#iaPreview figure { margin:0; width:108px; font-size:12px; overflow-wrap:anywhere; }
+#iaPreview img { width:108px; height:85px; object-fit:cover; border-radius:6px; }
+#iaResult { border-top:1px solid #d5dfd6; margin-top:20px; padding-top:18px; }
+#iaResult[hidden] { display:none; }
+#iaResult .ia-narrative { white-space:pre-wrap; overflow-wrap:anywhere; }
+#iaResult details { margin:12px 0; padding:10px; border:1px solid #d5dfd6; border-radius:6px; }
+#iaResult summary { cursor:pointer; }
+#iaResult table { width:100%; border-collapse:collapse; margin:14px 0; }
+#iaResult th, #iaResult td { text-align:left; vertical-align:top; padding:8px; border-bottom:1px solid #d5dfd6; overflow-wrap:anywhere; }
+#iaResult blockquote { margin:10px 0; padding-left:12px; border-left:3px solid #adc4ae; white-space:pre-wrap; overflow-wrap:anywhere; }
+#iaStatus { white-space:pre-wrap; }
+@media(max-width:540px) { #imageAssessment .ia-grid { grid-template-columns:1fr; } #imageAssessment .ia-body, #imageAssessment .ia-header { padding:16px; } }
+</style>
+<dialog id="imageAssessment" aria-labelledby="iaTitle" aria-describedby="iaDisclaimer">
+  <div class="ia-header"><h2 id="iaTitle">Assess tree damage</h2><button type="button" id="iaClose" aria-label="Close assessment">Close</button></div>
+  <div class="ia-body">
+    <p class="ia-note" id="iaDisclaimer">Preliminary assessment only—not a definitive phytosanitary diagnosis.</p>
+    <form id="iaForm">
+      <label for="iaImages">Photographs of the same tree</label>
+      <input id="iaImages" name="images" type="file" accept="image/jpeg,image/png" multiple required aria-describedby="iaFileHelp">
+      <p class="ia-hint" id="iaFileHelp">1–5 JPEG or PNG images. Maximum 10 MB each, 40 MB total and 25 megapixels per image. Photos will be sent to Pl@ntNet for analysis.</p>
+      <div id="iaPreview"></div>
+      <button type="button" id="iaRemovePhotos" disabled>Remove photos</button>
+      <p class="ia-hint">To use fresh photographs, remove the current photos, then choose new files. Context fields are kept; update them if you are assessing a different tree.</p>
+      <p class="ia-hint" id="iaOptional">Context is optional. Leave fields blank if unknown; choose Auto if the organ is unknown or photos show different organs.</p>
+      <label for="iaSpecies">Tree species, if known (optional)</label>
+      <input id="iaSpecies" name="species" maxlength="200" placeholder="e.g. sweet chestnut, oak, beech" aria-describedby="iaSpeciesHelp">
+      <p class="ia-hint" id="iaSpeciesHelp">Leave blank if unknown. Species is not automatically identified or verified. The reference corpus focuses on chestnut; coverage of other species may be limited.</p>
+      <div class="ia-grid">
+        <div><label for="iaOrgan">Affected organ</label><select id="iaOrgan" name="organ" aria-describedby="iaOptional">
+          <option value="auto">Auto / unknown or mixed organs</option><option value="leaf">Leaf</option><option value="bark">Bark / trunk</option><option value="branch">Branch / shoot</option><option value="fruit">Fruit / nut / burr</option><option value="whole_tree">Whole tree</option>
+        </select></div>
+        <div><label for="iaDate">Date or season (optional)</label><input id="iaDate" name="observation_date" maxlength="100" placeholder="e.g. September 2026"></div>
+      </div>
+      <label for="iaLocation">Tree location (optional)</label><input id="iaLocation" name="location" maxlength="300" placeholder="e.g. Malcantone, Ticino, about 650 m elevation">
+      <p class="ia-hint">Where the tree is growing. A municipality or region is enough; exact coordinates are unnecessary.</p>
+      <label for="iaSymptoms">Symptoms you observed (optional)</label><textarea id="iaSymptoms" name="symptoms" maxlength="3000" rows="3" placeholder="Describe the damage, when it appeared and whether other trees are affected."></textarea>
+      <button type="submit" id="iaSubmit">Assess photographs</button>
+      <p class="ia-hint">Pl@ntNet analyzes the images. The language model uses its candidates, your description and corpus references; it does not view the photographs. Assessment text is currently in English.</p>
+    </form>
+    <p id="iaStatus" role="status" aria-live="polite"></p>
+    <section id="iaResult" hidden aria-label="Assessment result"></section>
+  </div>
+</dialog>
+<script>
+(() => {
+  const dialog = document.getElementById('imageAssessment');
+  const form = document.getElementById('iaForm');
+  const fileInput = document.getElementById('iaImages');
+  const preview = document.getElementById('iaPreview');
+  const removePhotos = document.getElementById('iaRemovePhotos');
+  const result = document.getElementById('iaResult');
+  const status = document.getElementById('iaStatus');
+  const submit = document.getElementById('iaSubmit');
+  let urls = [];
+  let busy = false;
+  function add(parent, tag, text, className) {
+    const element = document.createElement(tag);
+    if (text !== undefined) element.textContent = text;
+    if (className) element.className = className;
+    parent.append(element);
+    return element;
+  }
+  document.getElementById('openAssessment').addEventListener('click', () => dialog.showModal());
+  document.getElementById('iaClose').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('close', () => document.getElementById('openAssessment').focus());
+  function clearPhotoDisplay() {
+    urls.forEach(url => URL.revokeObjectURL(url)); urls = [];
+    preview.replaceChildren();
+    result.replaceChildren(); result.hidden = true;
+  }
+  removePhotos.addEventListener('click', () => {
+    if (busy) return;
+    fileInput.value = '';
+    clearPhotoDisplay();
+    removePhotos.disabled = true;
+    status.textContent = 'Photos removed. Choose new photographs to start another assessment.';
+    fileInput.focus();
+  });
+  fileInput.addEventListener('change', () => {
+    clearPhotoDisplay();
+    removePhotos.disabled = busy || fileInput.files.length === 0;
+    status.textContent = '';
+    for (const file of [...fileInput.files].slice(0, 5)) {
+      if (!['image/jpeg', 'image/png'].includes(file.type) || file.size > 10 * 1024 * 1024) continue;
+      const figure = add(preview, 'figure');
+      const img = add(figure, 'img');
+      const url = URL.createObjectURL(file); urls.push(url);
+      img.src = url; img.alt = 'Selected photograph: ' + file.name;
+      add(figure, 'figcaption', file.name);
+    }
+  });
+  window.addEventListener('pagehide', () => urls.forEach(url => URL.revokeObjectURL(url)));
+  function render(data) {
+    const assessment = data.assessment || {};
+    result.replaceChildren(); result.hidden = false;
+    add(result, 'h3', 'Preliminary assessment');
+    if (assessment.status === 'fallback') {
+      add(result, 'p', 'A full corpus-based explanation is unavailable. The image results and next steps are shown below.', 'ia-note');
+    }
+    // All external text is rendered as text, never as HTML.
+    add(result, 'p', assessment.summary || data.message || 'No assessment is available.', 'ia-narrative');
+    add(result, 'p', 'Uncertainty: ' + (assessment.uncertainty || 'high') + '. ' + (assessment.uncertainty_reason || ''), 'ia-hint');
+    const candidates = data.identification?.candidates || assessment.image_candidates || [];
+    if (candidates.length) {
+      add(result, 'h3', 'Pl@ntNet image candidates');
+      add(result, 'p', 'Ranked by image-identification score—not a confirmed probability of disease. The narrative may support only some candidates.', 'ia-hint');
+      const table = add(result, 'table');
+      const head = add(add(table, 'thead'), 'tr');
+      for (const label of ['Possible cause', 'EPPO', 'Score']) { const th = add(head, 'th', label); th.scope = 'col'; }
+      const body = add(table, 'tbody');
+      candidates.forEach((candidate, index) => {
+        const row = add(body, 'tr');
+        add(row, 'td', `${index + 1}. ${candidate.description || candidate.scientific_name || candidate.eppo_code}`);
+        add(row, 'td', candidate.eppo_code || '—');
+        add(row, 'td', typeof candidate.confidence === 'number' ? candidate.confidence.toFixed(3) : 'Unavailable');
+      });
+    } else { add(result, 'p', data.identification?.message || 'No usable image candidates were returned.'); }
+    if (data.identification?.status && data.identification.status !== 'ok') {
+      add(result, 'p', data.identification.message, 'ia-hint');
+    }
+    const refs = add(result, 'details');
+    add(refs, 'summary', 'References for review');
+    add(refs, 'p', assessment.sources_note || 'Retrieved passages are reference material, not verified citations supporting every statement.', 'ia-hint');
+    const sources = assessment.sources || [];
+    if (!sources.length) add(refs, 'p', 'No reference passages are available.');
+    sources.forEach((source, index) => {
+      const item = add(refs, 'details');
+      add(item, 'summary', `${index + 1}. ${source.label || source.title || source.file_name || 'Corpus reference'}`);
+      add(item, 'blockquote', source.passage || source.snippet || 'Passage unavailable.');
+    });
+    const next = add(result, 'details');
+    add(next, 'summary', 'Additional information and expert review');
+    const list = add(next, 'ul');
+    (assessment.additional_information || []).forEach(item => add(list, 'li', item));
+    add(next, 'p', assessment.expert_inspection || 'Expert inspection may be needed to clarify the cause.');
+  }
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (busy) return;
+    const files = [...fileInput.files];
+    if (files.length < 1 || files.length > 5) { status.textContent = 'Select between 1 and 5 photographs of the same tree.'; return; }
+    if (files.some(file => !['image/jpeg', 'image/png'].includes(file.type))) { status.textContent = 'Only JPEG and PNG images are accepted.'; return; }
+    if (files.some(file => file.size > 10 * 1024 * 1024) || files.reduce((sum, file) => sum + file.size, 0) > 40 * 1024 * 1024) { status.textContent = 'Use images under 10 MB each and 40 MB combined.'; return; }
+    const body = new FormData(form);
+    busy = true; submit.disabled = true; removePhotos.disabled = true;
+    const controls = [...form.querySelectorAll('input, select, textarea')];
+    controls.forEach(control => control.disabled = true);
+    result.hidden = true;
+    status.textContent = 'Analyzing photographs and consulting the chestnut corpus… You can close this panel and reopen it while waiting.';
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 180000);
+    try {
+      const response = await fetch('/assess-images', { method:'POST', body, signal:controller.signal });
+      const data = await response.json();
+      if (!response.ok) {
+        status.textContent = typeof data.detail === 'string' ? data.detail : 'The upload could not be processed. Check the image format, size and context fields.';
+        return;
+      }
+      render(data);
+      status.textContent = 'Assessment ready.';
+    } catch (error) {
+      status.textContent = error.name === 'AbortError' ? 'The request took too long. The server may still be processing it. Please wait before trying again.' : 'Unable to reach the assessment service. Please try again.';
+    } finally {
+      clearTimeout(timer); busy = false; submit.disabled = false;
+      controls.forEach(control => control.disabled = false);
+      removePhotos.disabled = fileInput.files.length === 0;
+    }
+  });
+})();
+</script>

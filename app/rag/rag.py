@@ -1,6 +1,12 @@
 from functools import lru_cache
 import re
 from typing import Any
+from time import perf_counter
+
+from llama_index.core.callbacks import CallbackManager, CBEventType
+from llama_index.core.callbacks.base_handler import BaseCallbackHandler
+from app.utils.timing import timed_stage, record_seconds, record_detail
+from app.utils.source_catalogue import inline_citation, reference_entry
 
 from dotenv import load_dotenv
 from llama_index.core import Settings, StorageContext, load_index_from_storage
@@ -27,6 +33,35 @@ from app.utils.glossary import (
 load_dotenv()
 
 
+class _TimingHandler(BaseCallbackHandler):
+    """Measure library events without retaining their text payloads."""
+    def __init__(self, event_type, label):
+        super().__init__([], [])
+        self.event_type = event_type
+        self.label = label
+        self.starts = {}
+
+    def on_event_start(self, event_type, payload=None, event_id="", parent_id="", **kwargs):
+        if event_type == self.event_type:
+            self.starts[event_id] = perf_counter()
+        return event_id
+
+    def on_event_end(self, event_type, payload=None, event_id="", **kwargs):
+        start = self.starts.pop(event_id, None)
+        if start is not None:
+            record_seconds(self.label, perf_counter() - start)
+
+    def start_trace(self, trace_id=None):
+        pass
+
+    def end_trace(self, trace_id=None, trace_map=None):
+        pass
+
+
+def _timing_callbacks(event_type, label):
+    return CallbackManager([_TimingHandler(event_type, label)])
+
+
 @lru_cache(maxsize=1)
 def get_llm():
     llm = OpenAI(
@@ -49,12 +84,15 @@ def get_llm():
 
 @lru_cache(maxsize=1)
 def get_index():
+    callbacks = _timing_callbacks(CBEventType.EMBEDDING, "embedding_request")
     Settings.embed_model = OpenAIEmbedding(
         model=embedding_model(),
         api_key=embedding_api_key(),
+        callback_manager=callbacks,
     )
-    storage_context = StorageContext.from_defaults(persist_dir=str(PERSIST_DIR))
-    return load_index_from_storage(storage_context)
+    with timed_stage("index_load"):
+        storage_context = StorageContext.from_defaults(persist_dir=str(PERSIST_DIR))
+        return load_index_from_storage(storage_context, callback_manager=callbacks)
 
 
 @lru_cache(maxsize=2)
@@ -63,13 +101,15 @@ def get_hybrid_retriever(*, expand_queries: bool = True):
     index = get_index()
     vector_retriever = VectorIndexRetriever(
         index=index,
-        similarity_top_k=40,
+        similarity_top_k=10,
         vector_store_query_mode="mmr",
+        callback_manager=_timing_callbacks(CBEventType.RETRIEVE, "vector_retrieval"),
     )
     bm25_retriever = BM25Retriever.from_defaults(
         docstore=index.docstore,
         similarity_top_k=40,
     )
+    bm25_retriever.callback_manager = _timing_callbacks(CBEventType.RETRIEVE, "keyword_retrieval")
     return QueryFusionRetriever(
         retrievers=[vector_retriever, bm25_retriever],
         similarity_top_k=20,
@@ -114,10 +154,19 @@ def build_text_qa_prompt(
 
 
 def retrieve_source_nodes(question: str) -> list[Any]:
-    return list(get_hybrid_retriever(expand_queries=False).retrieve(question))
+    record_detail("index_cache_before", get_index.cache_info()._asdict())
+    record_detail("retriever_cache_before", get_hybrid_retriever.cache_info()._asdict())
+    with timed_stage("retriever_initialization"):
+        retriever = get_hybrid_retriever(expand_queries=False)
+    record_detail("index_cache_after", get_index.cache_info()._asdict())
+    record_detail("retriever_cache_after", get_hybrid_retriever.cache_info()._asdict())
+    with timed_stage("retrieval_total"):
+        return list(retriever.retrieve(question))
 
 
 def source_key_from_metadata(meta: dict[str, Any]) -> str:
+    if meta.get('source_id'):
+        return f"catalogue:{meta['source_id']}"
     return (
         str(
             meta.get("url")
@@ -165,6 +214,8 @@ def _source_author(meta: dict[str, Any]) -> str:
 
 
 def citation_label_from_metadata(meta: dict[str, Any]) -> str:
+    if meta.get('source_id'):
+        return reference_entry(meta)
     if meta.get("url"):
         domain = str(meta.get("domain") or meta.get("url") or "").strip()
         title = _clean_source_text(meta.get("title") or meta.get("citation_label"))
@@ -234,46 +285,49 @@ def diversify_source_nodes(
     return selected
 
 
-def format_retrieved_context(source_nodes: list[Any], limit: int = 8) -> str:
-    chunks = []
-
-    for i, sn in enumerate(source_nodes[:limit], start=1):
+def _numbered_source_nodes(source_nodes):
+    """Assign one internal citation number to each distinct publication."""
+    numbers = {}
+    for sn in source_nodes:
         node = getattr(sn, "node", sn)
         meta = dict(getattr(node, "metadata", {}) or {})
-        label = citation_label_from_metadata(meta) or f"source {i}"
-        text = node.get_text() if hasattr(node, "get_text") else str(node)
-        chunks.append(f"[Source {i}: {label}]\n{text.strip()}")
+        key = source_key_from_metadata(meta)
+        if not key:
+            key = "node:" + str(getattr(node, 'node_id', id(node)))
+        number = numbers.setdefault(key, len(numbers) + 1)
+        yield number, key, sn, node, meta
 
+
+def format_retrieved_context(source_nodes: list[Any], limit: int = 8) -> str:
+    chunks = []
+    for number, key, sn, node, meta in _numbered_source_nodes(source_nodes[:limit]):
+        label = citation_label_from_metadata(meta)
+        text = node.get_text() if hasattr(node, "get_text") else str(node)
+        chunks.append(f"[Source {number}: {label}]\n{text.strip()}")
     return "\n\n".join(chunks)
 
 
 def extract_sources(source_nodes: list[Any]) -> list[dict]:
-    sources = []
-    for i, sn in enumerate(source_nodes or [], start=1):
-        node = getattr(sn, "node", sn)
-        meta = dict(getattr(node, "metadata", {}) or {})
+    sources = {}
+    for number, key, sn, node, meta in _numbered_source_nodes(source_nodes):
+        if number in sources:
+            continue
         label = citation_label_from_metadata(meta)
-        sources.append(
-            {
-                "id": i,
-                "score": float(getattr(sn, "score", 0.0) or 0.0),
-                "source_type": meta.get("source_type") or "unknown",
-                "source_key": source_key_from_metadata(meta),
-                "file_name": meta.get("file_name") or meta.get("clean_file") or meta.get("file_name"),
-                "source_path": meta.get("source_path"),
-                "url": meta.get("url"),
-                "domain": meta.get("domain"),
-                "title": meta.get("title"),
-                "citation_label": meta.get("citation_label"),
-                "clean_file": meta.get("clean_file") or meta.get("file_name"),
-                "snippet": (node.get_text()[:240] + "…") if hasattr(node, "get_text") else None,
-                "label": label,
-            }
-        )
-    return sources
+        source = {
+            **meta,
+            "id": number, "source_key": key,
+            "score": float(getattr(sn, "score", 0.0) or 0.0),
+            "source_type": meta.get("source_type") or "unknown",
+            "snippet": (node.get_text()[:240] + "…") if hasattr(node, "get_text") else None,
+            "label": label,
+        }
+        source['inline_citation'] = inline_citation(source)
+        source['reference_entry'] = reference_entry(source)
+        sources[number] = source
+    return list(sources.values())
 
 
-def query_rag(
+def _prepare_rag(
     question: str,
     *,
     mode: str,
@@ -282,8 +336,9 @@ def query_rag(
     cite_style: str,
     language_hint_text: str = "",
     recent_source_keys: list[str] | None = None,
-) -> dict:
+) -> tuple[str, list[dict]]:
     retrieved_nodes = retrieve_source_nodes(question)
+    preparation_started = perf_counter()
     source_nodes = diversify_source_nodes(
         retrieved_nodes,
         recent_source_keys=recent_source_keys,
@@ -308,7 +363,43 @@ def query_rag(
         cite_style=cite_style,
         glossary_block=glossary_block,
     )
-    response = get_llm().complete(prompt)
-    answer_text = getattr(response, "text", None) or str(response)
+    sources = extract_sources(source_nodes)
+    record_seconds("prompt_preparation", perf_counter() - preparation_started)
+    record_detail("prompt_characters", len(prompt))
+    record_detail("context_characters", len(context_str))
+    record_detail("context_chunks", len(source_nodes))
+    return prompt, sources
 
-    return {"answer": answer_text, "sources": extract_sources(source_nodes)}
+
+def query_rag(question: str, **kwargs) -> dict:
+    """Return a complete answer for existing non-streaming callers."""
+    prompt, sources = _prepare_rag(question, **kwargs)
+    with timed_stage("model_complete"):
+        response = get_llm().complete(prompt)
+    return {"answer": getattr(response, "text", None) or str(response), "sources": sources}
+
+
+def stream_query_rag(question: str, **kwargs):
+    """Yield text deltas, followed by the sources after successful generation."""
+    prompt, sources = _prepare_rag(question, **kwargs)
+    yield {"type": "sources", "sources": sources}
+    model_started = perf_counter()
+    first_text = None
+    chunk_count = 0
+    responses = get_llm().stream_complete(prompt)
+    try:
+        for response in responses:
+            if response.delta:
+                if first_text is None:
+                    first_text = perf_counter()
+                    record_seconds("model_to_first_text", first_text - model_started)
+                chunk_count += 1
+                yield {"type": "delta", "text": response.delta}
+    finally:
+        record_seconds("model_stream_total", perf_counter() - model_started)
+        if first_text is not None:
+            record_seconds("after_first_text", perf_counter() - first_text)
+        record_detail("stream_text_chunks", chunk_count)
+        close = getattr(responses, "close", None)
+        if close:
+            close()

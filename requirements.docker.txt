@@ -6,7 +6,9 @@ llama-index-llms-openai
 llama-index-retrievers-bm25
 psycopg2-binary
 redis
+pillow
 python-dotenv
+python-multipart
 sqlalchemy
 geoalchemy2
 langdetect

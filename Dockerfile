@@ -32,6 +32,11 @@ COPY requirements.docker.txt /app/requirements.txt
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r /app/requirements.txt
 
+# Local OCR for image-only literature PDFs
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tesseract-ocr tesseract-ocr-eng tesseract-ocr-ita tesseract-ocr-deu && \
+    rm -rf /var/lib/apt/lists/*
+
 # ---------------------------------------------------
 # Copy application code
 # ---------------------------------------------------

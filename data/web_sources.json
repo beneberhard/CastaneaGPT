@@ -1,0 +1,437 @@
+[
+  {
+    "clean_file": "url_http_www_castanicoltoribio_com_.txt",
+    "source_type": "url",
+    "url": "http://www.castanicoltoribio.com/",
+    "domain": "www.castanicoltoribio.com",
+    "ingested_at": "2026-02-02T16:51:12"
+  },
+  {
+    "clean_file": "url_https_ancora_srl_it_.txt",
+    "source_type": "url",
+    "url": "https://ancora-srl.it/",
+    "domain": "ancora-srl.it",
+    "ingested_at": "2026-02-02T16:51:56"
+  },
+  {
+    "clean_file": "url_https_brunelleschi_imss_fi_it_itineraries_place_MuseoCastagn.txt",
+    "source_type": "url",
+    "url": "https://brunelleschi.imss.fi.it/itineraries/place/MuseoCastagno.html",
+    "domain": "brunelleschi.imss.fi.it",
+    "ingested_at": "2026-02-02T16:52:08"
+  },
+  {
+    "clean_file": "url_https_castagnadeimonticimini_it_.txt",
+    "source_type": "url",
+    "url": "https://castagnadeimonticimini.it/",
+    "domain": "castagnadeimonticimini.it",
+    "extraction_method": "full_page_fallback",
+    "char_count": 25,
+    "ingested_at": "2026-05-05T15:01:25"
+  },
+  {
+    "clean_file": "url_https_castagnadibernezzo_com_.txt",
+    "source_type": "url",
+    "url": "https://castagnadibernezzo.com/",
+    "domain": "castagnadibernezzo.com",
+    "extraction_method": "full_page_fallback",
+    "char_count": 2671,
+    "ingested_at": "2026-05-05T15:01:27"
+  },
+  {
+    "clean_file": "url_https_castagnedimontella_it_.txt",
+    "source_type": "url",
+    "url": "https://castagnedimontella.it/",
+    "domain": "castagnedimontella.it",
+    "ingested_at": "2026-02-02T16:51:43"
+  },
+  {
+    "clean_file": "url_https_castanicoltori_ch_.txt",
+    "source_type": "url",
+    "url": "https://castanicoltori.ch/",
+    "domain": "castanicoltori.ch",
+    "ingested_at": "2026-02-02T16:51:16"
+  },
+  {
+    "clean_file": "url_https_centrobiodiversita_castagnetogranaglione_it_.txt",
+    "source_type": "url",
+    "url": "https://centrobiodiversita-castagnetogranaglione.it/",
+    "domain": "centrobiodiversita-castagnetogranaglione.it",
+    "ingested_at": "2026-02-02T16:51:12"
+  },
+  {
+    "clean_file": "url_https_centrocastanicoltura_org_.txt",
+    "source_type": "url",
+    "url": "https://centrocastanicoltura.org/",
+    "domain": "centrocastanicoltura.org",
+    "ingested_at": "2026-02-02T16:51:11"
+  },
+  {
+    "clean_file": "url_https_conapi_it_apicoltori_marcello_caruso_.txt",
+    "source_type": "url",
+    "url": "https://conapi.it/apicoltori/marcello-caruso/",
+    "domain": "conapi.it",
+    "ingested_at": "2026-02-02T16:52:04"
+  },
+  {
+    "clean_file": "url_https_consorzioforestaleamiata_it_chi_siamo_.txt",
+    "source_type": "url",
+    "url": "https://consorzioforestaleamiata.it/chi-siamo/",
+    "domain": "consorzioforestaleamiata.it",
+    "ingested_at": "2026-02-02T16:51:52"
+  },
+  {
+    "clean_file": "url_https_imarroni_com_.txt",
+    "source_type": "url",
+    "url": "https://imarroni.com/",
+    "domain": "imarroni.com",
+    "title": "开云kaiyun官方网页版-kaiyun开云(中国)",
+    "citation_label": "开云kaiyun官方网页版-kaiyun开云(中国)",
+    "extraction_method": "readability",
+    "char_count": 269,
+    "ingested_at": "2026-10-30T13:47:47"
+  },
+  {
+    "clean_file": "url_https_www_alpacalabria_it_wp_.txt",
+    "source_type": "url",
+    "url": "https://www.alpacalabria.it/wp/",
+    "domain": "www.alpacalabria.it",
+    "ingested_at": "2026-02-02T16:52:01"
+  },
+  {
+    "clean_file": "url_https_www_assocastagna_org_.txt",
+    "source_type": "url",
+    "url": "https://www.assocastagna.org/",
+    "domain": "www.assocastagna.org",
+    "ingested_at": "2026-02-02T16:51:30"
+  },
+  {
+    "clean_file": "url_https_www_associazionecastanicoltori_it_.txt",
+    "source_type": "url",
+    "url": "https://www.associazionecastanicoltori.it/",
+    "domain": "www.associazionecastanicoltori.it",
+    "extraction_method": "full_page_fallback",
+    "char_count": 2357,
+    "ingested_at": "2026-05-05T15:01:11"
+  },
+  {
+    "clean_file": "url_https_www_associazionecastanicoltorilarioorientale_it_.txt",
+    "source_type": "url",
+    "url": "https://www.associazionecastanicoltorilarioorientale.it/",
+    "domain": "www.associazionecastanicoltorilarioorientale.it",
+    "ingested_at": "2026-02-02T16:51:37"
+  },
+  {
+    "clean_file": "url_https_www_castagna_amiata_it_.txt",
+    "source_type": "url",
+    "url": "https://www.castagna-amiata.it/",
+    "domain": "www.castagna-amiata.it",
+    "extraction_method": "full_page_fallback",
+    "char_count": 1882,
+    "ingested_at": "2026-05-05T15:01:23"
+  },
+  {
+    "clean_file": "url_https_www_castagnacuneoigp_com_.txt",
+    "source_type": "url",
+    "url": "https://www.castagnacuneoigp.com/",
+    "domain": "www.castagnacuneoigp.com",
+    "ingested_at": "2026-02-02T16:51:56"
+  },
+  {
+    "clean_file": "url_https_www_castanicoltori_it_index_html.txt",
+    "source_type": "url",
+    "url": "https://www.castanicoltori.it/index.html",
+    "domain": "www.castanicoltori.it",
+    "ingested_at": "2026-02-02T16:51:14"
+  },
+  {
+    "clean_file": "url_https_www_castanicoltoriaverara_it_castagneto_.txt",
+    "source_type": "url",
+    "url": "https://www.castanicoltoriaverara.it/castagneto/",
+    "domain": "www.castanicoltoriaverara.it",
+    "ingested_at": "2026-02-02T16:51:37"
+  },
+  {
+    "clean_file": "url_https_www_castanicoltoriaverara_it_chi_siamo_.txt",
+    "source_type": "url",
+    "url": "https://www.castanicoltoriaverara.it/chi-siamo/",
+    "domain": "www.castanicoltoriaverara.it",
+    "ingested_at": "2026-02-02T16:51:21"
+  },
+  {
+    "clean_file": "url_https_www_castanicoltorideltrentino_it_.txt",
+    "source_type": "url",
+    "url": "https://www.castanicoltorideltrentino.it/",
+    "domain": "www.castanicoltorideltrentino.it",
+    "ingested_at": "2026-02-02T16:51:23"
+  },
+  {
+    "clean_file": "url_https_www_castanicoltorilariani_com_az_agricola1_.txt",
+    "source_type": "url",
+    "url": "https://www.castanicoltorilariani.com/az-agricola1/",
+    "domain": "www.castanicoltorilariani.com",
+    "ingested_at": "2026-02-02T16:51:18"
+  },
+  {
+    "clean_file": "url_https_www_castanicoltorilariani_com_castanicoltori_bio_.txt",
+    "source_type": "url",
+    "url": "https://www.castanicoltorilariani.com/castanicoltori-bio/",
+    "domain": "www.castanicoltorilariani.com",
+    "ingested_at": "2026-02-02T16:51:17"
+  },
+  {
+    "clean_file": "url_https_www_centrostudicastagno_it_.txt",
+    "source_type": "url",
+    "url": "https://www.centrostudicastagno.it/",
+    "domain": "www.centrostudicastagno.it",
+    "ingested_at": "2026-02-02T16:51:12"
+  },
+  {
+    "clean_file": "url_https_www_cittadelcastagno_it_.txt",
+    "source_type": "url",
+    "url": "https://www.cittadelcastagno.it/",
+    "domain": "www.cittadelcastagno.it",
+    "ingested_at": "2026-02-02T16:51:12"
+  },
+  {
+    "clean_file": "url_https_www_cittametropolitana_bo_it_cultura_Musei_home_Museo_.txt",
+    "source_type": "url",
+    "url": "https://www.cittametropolitana.bo.it/cultura/Musei_home/Museo_Castagno_Centro_Didattico_Ambientale_Animal_Tower",
+    "domain": "www.cittametropolitana.bo.it",
+    "extraction_method": "full_page_fallback",
+    "char_count": 1922,
+    "ingested_at": "2026-05-05T15:01:40"
+  },
+  {
+    "clean_file": "url_https_www_consorziocastanicoltori_it_cooperativa_azienda_agr.txt",
+    "source_type": "url",
+    "url": "https://www.consorziocastanicoltori.it/cooperativa/azienda-agricola-massimo-piccinelli/",
+    "domain": "www.consorziocastanicoltori.it",
+    "extraction_method": "full_page_fallback",
+    "char_count": 1985,
+    "ingested_at": "2026-05-05T15:01:14"
+  },
+  {
+    "clean_file": "url_https_www_consorziocastanicoltori_it_en_.txt",
+    "source_type": "url",
+    "url": "https://www.consorziocastanicoltori.it/en/",
+    "domain": "www.consorziocastanicoltori.it",
+    "extraction_method": "full_page_fallback",
+    "char_count": 4307,
+    "ingested_at": "2026-05-05T15:01:08"
+  },
+  {
+    "clean_file": "url_https_www_facebook_com_ConsorzioCastanicoltori_.txt",
+    "source_type": "url",
+    "url": "https://www.facebook.com/ConsorzioCastanicoltori/",
+    "domain": "www.facebook.com",
+    "extraction_method": "full_page_fallback",
+    "char_count": 45,
+    "ingested_at": "2026-05-05T15:01:10"
+  },
+  {
+    "clean_file": "url_https_www_facebook_com_MuracaIndustriaAgroalimentare_.txt",
+    "source_type": "url",
+    "url": "https://www.facebook.com/MuracaIndustriaAgroalimentare/",
+    "domain": "www.facebook.com",
+    "extraction_method": "full_page_fallback",
+    "char_count": 8,
+    "ingested_at": "2026-05-05T15:01:28"
+  },
+  {
+    "clean_file": "url_https_www_facebook_com_associazionecastanicoltorialtavallede.txt",
+    "source_type": "url",
+    "url": "https://www.facebook.com/associazionecastanicoltorialtavalledelreno/",
+    "domain": "www.facebook.com",
+    "extraction_method": "full_page_fallback",
+    "char_count": 47,
+    "ingested_at": "2026-05-05T15:01:18"
+  },
+  {
+    "clean_file": "url_https_www_facebook_com_castagnaamiata_.txt",
+    "source_type": "url",
+    "url": "https://www.facebook.com/castagnaamiata/",
+    "domain": "www.facebook.com",
+    "extraction_method": "full_page_fallback",
+    "char_count": 29,
+    "ingested_at": "2026-05-05T15:01:24"
+  },
+  {
+    "clean_file": "url_https_www_facebook_com_castanicoltorimisma_.txt",
+    "source_type": "url",
+    "url": "https://www.facebook.com/castanicoltorimisma/",
+    "domain": "www.facebook.com",
+    "extraction_method": "full_page_fallback",
+    "char_count": 34,
+    "ingested_at": "2026-05-05T15:01:12"
+  },
+  {
+    "clean_file": "url_https_www_facebook_com_castanicoltorimontagnapt_.txt",
+    "source_type": "url",
+    "url": "https://www.facebook.com/castanicoltorimontagnapt/",
+    "domain": "www.facebook.com",
+    "extraction_method": "full_page_fallback",
+    "char_count": 56,
+    "ingested_at": "2026-05-05T15:01:15"
+  },
+  {
+    "clean_file": "url_https_www_facebook_com_castanicoltoriorobici_.txt",
+    "source_type": "url",
+    "url": "https://www.facebook.com/castanicoltoriorobici/",
+    "domain": "www.facebook.com",
+    "extraction_method": "full_page_fallback",
+    "char_count": 45,
+    "ingested_at": "2026-05-05T15:01:09"
+  },
+  {
+    "clean_file": "url_https_www_facebook_com_castanicoltorivalrendena_.txt",
+    "source_type": "url",
+    "url": "https://www.facebook.com/castanicoltorivalrendena/",
+    "domain": "www.facebook.com",
+    "extraction_method": "full_page_fallback",
+    "char_count": 49,
+    "ingested_at": "2026-05-05T15:01:17"
+  },
+  {
+    "clean_file": "url_https_www_facebook_com_castanicoltorivulture_.txt",
+    "source_type": "url",
+    "url": "https://www.facebook.com/castanicoltorivulture/",
+    "domain": "www.facebook.com",
+    "extraction_method": "full_page_fallback",
+    "char_count": 8,
+    "ingested_at": "2026-05-05T15:01:26"
+  },
+  {
+    "clean_file": "url_https_www_facebook_com_museocastagnofagnano_.txt",
+    "source_type": "url",
+    "url": "https://www.facebook.com/museocastagnofagnano/",
+    "domain": "www.facebook.com",
+    "extraction_method": "full_page_fallback",
+    "char_count": 8,
+    "ingested_at": "2026-05-05T15:01:40"
+  },
+  {
+    "clean_file": "url_https_www_facebook_com_people_Consorzio_Castanicoltori_dellA.txt",
+    "source_type": "url",
+    "url": "https://www.facebook.com/people/Consorzio-Castanicoltori-dellAppennino-Bolognese/100063472660125/",
+    "domain": "www.facebook.com",
+    "extraction_method": "full_page_fallback",
+    "char_count": 59,
+    "ingested_at": "2026-05-05T15:01:16"
+  },
+  {
+    "clean_file": "url_https_www_facebook_com_profile_php_id_61564369500169_.txt",
+    "source_type": "url",
+    "url": "https://www.facebook.com/profile.php?id=61564369500169#",
+    "domain": "www.facebook.com",
+    "extraction_method": "full_page_fallback",
+    "char_count": 36,
+    "ingested_at": "2026-05-05T15:01:25"
+  },
+  {
+    "clean_file": "url_https_www_facebook_com_profile_php_id_61579914715556_.txt",
+    "source_type": "url",
+    "url": "https://www.facebook.com/profile.php?id=61579914715556#",
+    "domain": "www.facebook.com",
+    "extraction_method": "full_page_fallback",
+    "char_count": 39,
+    "ingested_at": "2026-05-05T15:01:15"
+  },
+  {
+    "clean_file": "url_https_www_fratellicastellino_it_.txt",
+    "source_type": "url",
+    "url": "https://www.fratellicastellino.it/",
+    "domain": "www.fratellicastellino.it",
+    "ingested_at": "2026-02-02T16:51:57"
+  },
+  {
+    "clean_file": "url_https_www_lamaruna_it_.txt",
+    "source_type": "url",
+    "url": "https://www.lamaruna.it/",
+    "domain": "www.lamaruna.it",
+    "ingested_at": "2026-02-02T16:51:41"
+  },
+  {
+    "clean_file": "url_https_www_lavalledivico_it_castagne_marroni_monti_cimini_htm.txt",
+    "source_type": "url",
+    "url": "https://www.lavalledivico.it/castagne-marroni-monti-cimini.html",
+    "domain": "www.lavalledivico.it",
+    "ingested_at": "2026-02-02T16:51:53"
+  },
+  {
+    "clean_file": "url_https_www_marronedicasteldelrioigp_com_consorzio_castagnicol.txt",
+    "source_type": "url",
+    "url": "https://www.marronedicasteldelrioigp.com/consorzio_castagnicoltori.htm",
+    "domain": "www.marronedicasteldelrioigp.com",
+    "title": "CONSORZIO - MARRONE DI CASTEL DEL RIO",
+    "citation_label": "CONSORZIO - MARRONE DI CASTEL DEL RIO",
+    "extraction_method": "readability",
+    "char_count": 2105,
+    "ingested_at": "2026-05-26T11:13:33"
+  },
+  {
+    "clean_file": "url_https_www_marronedirivalto_it_2021_04_11_la_castanicoltura_t.txt",
+    "source_type": "url",
+    "url": "https://www.marronedirivalto.it/2021/04/11/la-castanicoltura-tradizionale-da-frutto-in-italia-una-opportunita-per-i-giovani/",
+    "domain": "www.marronedirivalto.it",
+    "ingested_at": "2026-02-02T16:51:28"
+  },
+  {
+    "clean_file": "url_https_www_marronedisanzeno_it_eventi_php.txt",
+    "source_type": "url",
+    "url": "https://www.marronedisanzeno.it/eventi.php",
+    "domain": "www.marronedisanzeno.it",
+    "ingested_at": "2026-02-02T16:51:55"
+  },
+  {
+    "clean_file": "url_https_www_mastrogregori_it_.txt",
+    "source_type": "url",
+    "url": "https://www.mastrogregori.it/",
+    "domain": "www.mastrogregori.it",
+    "extraction_method": "full_page_fallback",
+    "char_count": 1722,
+    "ingested_at": "2026-05-05T15:01:27"
+  },
+  {
+    "clean_file": "url_https_www_moronefeltrino_it_it_.txt",
+    "source_type": "url",
+    "url": "https://www.moronefeltrino.it/it/",
+    "domain": "www.moronefeltrino.it",
+    "ingested_at": "2026-02-02T16:51:55"
+  },
+  {
+    "clean_file": "url_https_www_saporiantichi_net.txt",
+    "source_type": "url",
+    "url": "https://www.saporiantichi.net",
+    "domain": "www.saporiantichi.net",
+    "ingested_at": "2026-02-02T16:52:03"
+  },
+  {
+    "clean_file": "url_https_www_terredicastelli_eu_en_places_of_interest_the_chest.txt",
+    "source_type": "url",
+    "url": "https://www.terredicastelli.eu/en/places-of-interest/the-chestnut-museum/",
+    "domain": "www.terredicastelli.eu",
+    "ingested_at": "2026-02-02T16:52:08"
+  },
+  {
+    "clean_file": "url_https_www_trentiner_it_food_i_trentiner_cooperativa_castanic.txt",
+    "source_type": "url",
+    "url": "https://www.trentiner.it/food/i-trentiner/cooperativa-castanicoltori-del-trentino-prezzi-vendita-online",
+    "domain": "www.trentiner.it",
+    "ingested_at": "2026-02-02T16:51:24"
+  },
+  {
+    "clean_file": "url_https_www_tusciadoc_com_le_castagne_dei_monti_cimini_.txt",
+    "source_type": "url",
+    "url": "https://www.tusciadoc.com/le-castagne-dei-monti-cimini/",
+    "domain": "www.tusciadoc.com",
+    "ingested_at": "2026-02-02T16:51:53"
+  },
+  {
+    "clean_file": "url_https_www_visittuscany_com_it_attrazioni_museo_del_castagno_.txt",
+    "source_type": "url",
+    "url": "https://www.visittuscany.com/it/attrazioni/museo-del-castagno-a-pescaglia/",
+    "domain": "www.visittuscany.com",
+    "ingested_at": "2026-02-02T16:52:09"
+  }
+]
