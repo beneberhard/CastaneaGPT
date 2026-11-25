@@ -45,3 +45,4 @@ coverage.xml
 *.bak
 *.orig
 *~
+/docs/source-catalogue.md
