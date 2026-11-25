@@ -19,3 +19,29 @@ tmp_map_script.js
 
 # Local RAG source documents
 data/corpus_raw/
+
+# Local benchmark notes (keep on this machine)
+/docs/chat-latency.md
+
+# Local environment variants; retain publishable templates
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+
+# Python environments, tool caches, and coverage output
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Runtime logs and temporary editor/backup files
+*.log
+*.bak
+*.orig
+*~
