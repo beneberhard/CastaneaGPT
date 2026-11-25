@@ -908,6 +908,71 @@
       "url": null,
       "doi": null,
       "full_reference": "Ecker-Eckhofen, H., Klement, J., Rühmer, T., and Schantl, J.. Die Edelkastanie: Waldbaum und Obstgehölz — Sorten, Anbau, Pflege, Verarbeitung etc., 2018. 2., überarbeitete Auflage. ARGE Zukunft Edelkastanie, Thal, Austria, 112 pp."
-    }
+    },
+  {
+    "source_id": 7,
+    "file": "pdf/7.pdf",
+    "authors_text": "Dinis, L. T., Peixoto, F., Pinto, T., Costa, R., Bennett, R. N., and Gomes-Laranjo, J.",
+    "first_author": "Dinis",
+    "multiple_authors": true,
+    "title": "Study of morphological and phenological diversity in chestnut trees (‘Judia’ variety) as a function of temperature sum",
+    "year": 2011,
+    "year_suffix": "",
+    "url": "https://doi.org/10.1016/j.envexpbot.2010.08.003",
+    "doi": "10.1016/j.envexpbot.2010.08.003",
+    "full_reference": "Dinis, L. T., Peixoto, F., Pinto, T., Costa, R., Bennett, R. N., and Gomes-Laranjo, J.. Study of morphological and phenological diversity in chestnut trees (‘Judia’ variety) as a function of temperature sum, 2011. Environmental and Experimental Botany, 70, 110–120. https://doi.org/10.1016/j.envexpbot.2010.08.003."
+  },
+  {
+    "source_id": 8,
+    "file": "pdf/8.pdf",
+    "authors_text": "Gomes-Laranjo, J., Dinis, L.-T., Marques, T., Mota, M., Carvalho, A., Pinto, T., Anjos, R., Martins, L., Marques, G., Gaspar, M. J., Gonzalez Pereira, M., Raimundo, F., and Ferreira-Cardoso, J.",
+    "first_author": "Gomes-Laranjo",
+    "multiple_authors": true,
+    "title": "Increasing chestnut resilience to climate change with innovative management practices",
+    "year": 2018,
+    "year_suffix": "",
+    "url": "https://doi.org/10.17660/ActaHortic.2018.1220.24",
+    "doi": "10.17660/ActaHortic.2018.1220.24",
+    "full_reference": "Gomes-Laranjo, J., Dinis, L.-T., Marques, T., Mota, M., Carvalho, A., Pinto, T., Anjos, R., Martins, L., Marques, G., Gaspar, M. J., Gonzalez Pereira, M., Raimundo, F., and Ferreira-Cardoso, J.. Increasing chestnut resilience to climate change with innovative management practices, 2018. In Proceedings of the VI International Chestnut Symposium, Acta Horticulturae, 1220, 163–176. ISHS. https://doi.org/10.17660/ActaHortic.2018.1220.24."
+  },
+  {
+    "source_id": 9,
+    "file": "pdf/9.pdf",
+    "authors_text": "Carneiro-Carvalho, A., Anjos, R., Lousada, J., Marques, T., Pinto, T., and Gomes-Laranjo, J.",
+    "first_author": "Carneiro-Carvalho",
+    "multiple_authors": true,
+    "title": "Ecophysiological study of SiK impact on Castanea sativa Mill. tolerance to drought stress",
+    "year": 2020,
+    "year_suffix": "",
+    "url": "https://doi.org/10.32615/ps.2020.030",
+    "doi": "10.32615/ps.2020.030",
+    "full_reference": "Carneiro-Carvalho, A., Anjos, R., Lousada, J., Marques, T., Pinto, T., and Gomes-Laranjo, J.. Ecophysiological study of SiK impact on Castanea sativa Mill. tolerance to drought stress, 2020. Photosynthetica, 58(5), 1078–1089. https://doi.org/10.32615/ps.2020.030."
+  },
+  {
+    "source_id": 50,
+    "file": "pdf/50.pdf",
+    "authors_text": "Gomes-Laranjo, J., Pereira-Lorenzo, S., and Marino, G.",
+    "first_author": "Gomes-Laranjo",
+    "multiple_authors": true,
+    "title": "The world sector of chestnut",
+    "year": 2024,
+    "year_suffix": "",
+    "url": "https://doi.org/10.17660/ActaHortic.2024.1400.1",
+    "doi": "10.17660/ActaHortic.2024.1400.1",
+    "full_reference": "Gomes-Laranjo, J., Pereira-Lorenzo, S., and Marino, G.. The world sector of chestnut, 2024. In Proceedings of the VII International Chestnut Symposium, Acta Horticulturae, 1400, 1–14. ISHS. https://doi.org/10.17660/ActaHortic.2024.1400.1."
+  },
+  {
+    "source_id": 57,
+    "file": "pdf/57.pdf",
+    "authors_text": "Pereira-Lorenzo, S., Costa, R., Anagnostakis, S., Serdar, U., Yamamoto, T., Saito, T., Ramos-Cabrer, A. M., Ling, Q., Barreneche, T., Robin, C., Botta, R., Contessa, C., Conedera, M., Martín, L. M., Martín, A., Gomes-Laranjo, J., Villani, F., and Carlson, J. E.",
+    "first_author": "Pereira-Lorenzo",
+    "multiple_authors": true,
+    "title": "Interspecific Hybridization of Chestnut",
+    "year": 2016,
+    "year_suffix": "",
+    "url": "",
+    "doi": "",
+    "full_reference": "Pereira-Lorenzo, S., Costa, R., Anagnostakis, S., Serdar, U., Yamamoto, T., Saito, T., Ramos-Cabrer, A. M., Ling, Q., Barreneche, T., Robin, C., Botta, R., Contessa, C., Conedera, M., Martín, L. M., Martín, A., Gomes-Laranjo, J., Villani, F., and Carlson, J. E.. Interspecific Hybridization of Chestnut, 2016. In Mason, A. S. (Ed.), Polyploidy and Hybridization for Crop Improvement, Chapter 15. CRC Press."
+  }
   ]
 }
